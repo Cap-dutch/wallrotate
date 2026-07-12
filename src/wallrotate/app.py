@@ -35,10 +35,15 @@ from .config import Config, ScreenProfile, load_config, save_config
 from .engine import apply_profile, run_once
 from .config import load_state, save_state
 
+APP_ICON_PATH = Path(__file__).parent / "resources" / "icon.svg"
 APP_ICON_NAMES = ("preferences-desktop-wallpaper", "image-x-generic", "applications-graphics")
 
 
 def _app_icon() -> QIcon:
+    if APP_ICON_PATH.exists():
+        icon = QIcon(str(APP_ICON_PATH))
+        if not icon.isNull():
+            return icon
     for name in APP_ICON_NAMES:
         icon = QIcon.fromTheme(name)
         if not icon.isNull():
