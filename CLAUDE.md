@@ -1,0 +1,52 @@
+# WallRotate — rotador de fondos de pantalla con collage
+
+App de escritorio para KDE Plasma (CachyOS): rota el fondo de pantalla por
+monitor, con soporte de imagen fija, carpeta en slideshow, o collage
+generado a partir de fotos (estilo "pila de polaroids", inspirado en
+John's Background Switcher, que no tiene versión Linux).
+
+## Arquitectura
+
+| Pieza | Archivo | Rol |
+|---|---|---|
+| Generador de collage | `src/wallrotate/collage.py` | Compone N fotos con Pillow: marco polaroid, sombra, rotación aleatoria, fondo difuminado |
+| Bridge a Plasma | `src/wallrotate/plasma_bridge.py` | Detecta monitores y aplica wallpaper por pantalla vía `qdbus6`/`org.kde.PlasmaShell.evaluateScript` (método `setWallpaper` nativo no soporta bien parámetros complejos desde CLI, se usa scripting JS de Plasma) |
+| Config | `src/wallrotate/config.py` | Perfiles por pantalla en `~/.config/wallrotate/config.json`, estado de rotación en `state.json` |
+| Motor | `src/wallrotate/engine.py` | Revisa perfiles, aplica el siguiente fondo si venció el intervalo. Se ejecuta vía systemd timer |
+| GUI | `src/wallrotate/app.py` | PySide6, una pestaña por monitor detectado |
+
+## Cómo correr
+
+```bash
+cd ~/Proyectos/wallrotate
+uv run wallrotate          # abre la GUI de configuración
+uv run wallrotate-engine   # corre el motor una vez (lo hace el timer automáticamente)
+```
+
+## Automatización
+
+`~/.config/systemd/user/wallrotate.{service,timer}` — el timer corre el
+motor cada 1 minuto; el motor decide internamente si a cada pantalla le
+toca rotar según su `interval_minutes`. Ver estado:
+
+```bash
+systemctl --user status wallrotate.timer
+journalctl --user -u wallrotate.service -f
+```
+
+## Cuidado con el contenido de las fuentes
+
+Las carpetas de fotos personales del usuario pueden tener contenido no
+apto para todo público. **Al generar o previsualizar collages en sesiones
+de Claude, confirmar primero con el usuario qué carpeta es segura usar**
+— el modelo no puede procesar ese tipo de contenido. Para pruebas usar
+`/usr/share/wallpapers/cachyos-wallpapers/` (siempre seguro) u otra
+carpeta que el usuario confirme explícitamente.
+
+## Pendientes / mejoras futuras
+
+- La resolución del timer es de 1 min — intervalos menores a eso no aplican.
+- No maneja hot-plug de monitores mientras la GUI está abierta (hay que
+  reabrirla si se conecta/desconecta un monitor).
+- Sin tests automatizados todavía.
+- El fill mode "mosaico" usa el valor Qt `Tile` pero no se probó a fondo.
