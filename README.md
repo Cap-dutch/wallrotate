@@ -25,16 +25,29 @@ de fotos "esparcidas" tipo polaroid en su escritorio Linux.
 - **Parámetros de collage ajustables**: cantidad de fotos, ángulo máximo de rotación, sombra on/off, marco on/off, tamaño relativo de cada foto, tipo de fondo (difuminado o color sólido).
 - **Vista previa** antes de aplicar.
 - **Rotación automática en segundo plano** vía `systemd --user timer`, no depende de que la app esté abierta.
+- **Icono en la bandeja del sistema**: al cerrar o minimizar la ventana, sigue corriendo en segundo plano (click derecho para rotar ya mismo o salir de verdad).
 
 ## Instalación
 
 Requiere Python 3.13+, [uv](https://docs.astral.sh/uv/), y KDE Plasma 6 (usa `qdbus6` y `kscreen-doctor`, ambos parte de Plasma).
 
 ```bash
-git clone <url-del-repo> wallrotate
+git clone git@github.com:Cap-dutch/wallrotate.git
 cd wallrotate
 uv sync
 ```
+
+Opcional, para poder lanzarlo como comando (`wallrotate`) y desde el menú de aplicaciones:
+
+```bash
+mkdir -p ~/.local/bin ~/.local/share/applications
+ln -sf "$(pwd)/.venv/bin/wallrotate" ~/.local/bin/wallrotate
+ln -sf "$(pwd)/.venv/bin/wallrotate-engine" ~/.local/bin/wallrotate-engine
+cp packaging/wallrotate.desktop ~/.local/share/applications/
+update-desktop-database ~/.local/share/applications
+```
+
+(`~/.local/bin` tiene que estar en tu `PATH`.)
 
 ## Uso
 

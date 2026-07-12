@@ -5,8 +5,8 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-from PySide6.QtCore import Qt
-from PySide6.QtGui import QPixmap
+from PySide6.QtCore import Qt, QEvent
+from PySide6.QtGui import QIcon, QPixmap
 from PySide6.QtWidgets import (
     QApplication,
     QCheckBox,
@@ -18,10 +18,12 @@ from PySide6.QtWidgets import (
     QLabel,
     QLineEdit,
     QMainWindow,
+    QMenu,
     QMessageBox,
     QPushButton,
     QSlider,
     QSpinBox,
+    QSystemTrayIcon,
     QTabWidget,
     QVBoxLayout,
     QWidget,
@@ -30,8 +32,18 @@ from PySide6.QtWidgets import (
 from . import plasma_bridge
 from .collage import CollageParams, generate_collage
 from .config import Config, ScreenProfile, load_config, save_config
-from .engine import apply_profile
+from .engine import apply_profile, run_once
 from .config import load_state, save_state
+
+APP_ICON_NAMES = ("preferences-desktop-wallpaper", "image-x-generic", "applications-graphics")
+
+
+def _app_icon() -> QIcon:
+    for name in APP_ICON_NAMES:
+        icon = QIcon.fromTheme(name)
+        if not icon.isNull():
+            return icon
+    return QIcon.fromTheme("image")
 
 SOURCE_LABELS = {
     "single_image": "Imagen fija",
@@ -233,6 +245,8 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.setWindowTitle("WallRotate")
         self.resize(720, 640)
+        self.setWindowIcon(_app_icon())
+        self._really_quit = False
 
         self.config = load_config()
         self.screens = plasma_bridge.list_screens()
@@ -256,6 +270,56 @@ class MainWindow(QMainWindow):
         layout.addWidget(save_btn)
 
         self.setCentralWidget(central)
+        self._setup_tray()
+
+    def _setup_tray(self) -> None:
+        self.tray = QSystemTrayIcon(_app_icon(), self)
+        self.tray.setToolTip("WallRotate")
+
+        menu = QMenu()
+        show_action = menu.addAction("Abrir")
+        show_action.triggered.connect(self._show_from_tray)
+        rotate_action = menu.addAction("Rotar ahora")
+        rotate_action.triggered.connect(self._rotate_now_all)
+        menu.addSeparator()
+        quit_action = menu.addAction("Salir")
+        quit_action.triggered.connect(self._quit)
+
+        self.tray.setContextMenu(menu)
+        self.tray.activated.connect(self._on_tray_activated)
+        self.tray.show()
+
+    def _on_tray_activated(self, reason) -> None:
+        if reason == QSystemTrayIcon.ActivationReason.Trigger:
+            self._show_from_tray()
+
+    def _show_from_tray(self) -> None:
+        self.showNormal()
+        self.raise_()
+        self.activateWindow()
+
+    def _rotate_now_all(self) -> None:
+        run_once(force=True)
+        self.tray.showMessage("WallRotate", "Fondos rotados en todas las pantallas activas.", QSystemTrayIcon.MessageIcon.Information, 3000)
+
+    def _quit(self) -> None:
+        self._really_quit = True
+        QApplication.instance().quit()
+
+    def closeEvent(self, event) -> None:
+        if self._really_quit:
+            event.accept()
+            return
+        event.ignore()
+        self.hide()
+        self.tray.showMessage("WallRotate", "Sigue corriendo en la bandeja del sistema.", QSystemTrayIcon.MessageIcon.Information, 3000)
+
+    def changeEvent(self, event) -> None:
+        if event.type() == QEvent.Type.WindowStateChange and self.isMinimized():
+            event.ignore()
+            self.hide()
+        else:
+            super().changeEvent(event)
 
     def _save(self) -> None:
         profiles = [tab.to_profile() for tab in self.screen_tabs]
@@ -266,6 +330,10 @@ class MainWindow(QMainWindow):
 
 def main() -> None:
     app = QApplication(sys.argv)
+    app.setApplicationName("WallRotate")
+    app.setApplicationDisplayName("WallRotate")
+    app.setDesktopFileName("wallrotate")
+    app.setQuitOnLastWindowClosed(False)
     window = MainWindow()
     window.show()
     sys.exit(app.exec())

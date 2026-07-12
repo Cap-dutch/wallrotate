@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=WallRotate
+Comment=Rotador de fondos de pantalla con collage, por monitor
+Exec=wallrotate
+Icon=preferences-desktop-wallpaper
+Terminal=false
+Categories=Utility;DesktopSettings;
+StartupNotify=true
