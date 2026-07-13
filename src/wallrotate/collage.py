@@ -81,34 +81,25 @@ def _with_shadow(photo: Image.Image, params: CollageParams) -> Image.Image:
     return layer
 
 
-def _grid(n: int, canvas_size: tuple[int, int]) -> tuple[int, int, float, float]:
-    """Calcula columnas/filas y el tamano de celda para repartir n fotos en el canvas."""
+def _frame_content_size(params: CollageParams, canvas_width: int) -> tuple[int, int]:
+    """Tamano (fijo, para todas las fotos) del area de imagen dentro del marco.
+    Depende solo de photo_scale, nunca se recorta por una grilla."""
+    content_width = max(int(canvas_width * params.photo_scale), 40)
+    content_height = int(content_width * params.frame_aspect)
+    return content_width, content_height
+
+
+def _scatter_center(canvas_size: tuple[int, int], layer_size: tuple[int, int], rng: random.Random) -> tuple[float, float]:
+    """Elige un centro al azar en todo el canvas, dejando que las fotos se
+    superpongan libremente (estilo pila real), con un margen para que la
+    mayor parte de cada foto quede visible."""
     w, h = canvas_size
-    cols = max(1, round((n * w / h) ** 0.5))
-    rows = max(1, -(-n // cols))  # ceil
-    return cols, rows, w / cols, h / rows
-
-
-def _frame_content_size(cols: int, rows: int, cell_w: float, cell_h: float, params: CollageParams, canvas_width: int) -> tuple[int, int]:
-    """Calcula el tamano (fijo, para todas las fotos) del area de imagen dentro
-    del marco, de forma que el marco completo (foto + borde + sombra) entre en
-    una celda de la grilla, respetando frame_aspect."""
-    border_extra_w = (params.border_width * 2) if params.border else 0
-    border_extra_h = (params.border_width * 2 + params.bottom_border_extra) if params.border else 0
-    shadow_pad = (params.shadow_blur * 3 + max(params.shadow_offset)) * 2 if params.shadow else 0
-
-    # margen de seguridad para el jitter de la posicion y para que no se toquen los bordes
-    max_frame_w = cell_w * 0.82 - border_extra_w - shadow_pad
-    max_frame_h = cell_h * 0.78 - border_extra_h - shadow_pad
-
-    # el ancho de contenido mas grande que respeta frame_aspect y entra en ambos limites
-    width_by_h_limit = max_frame_h / params.frame_aspect
-    content_width = max(min(max_frame_w, width_by_h_limit), 40)
-
-    global_max_width = canvas_width * params.photo_scale
-    content_width = min(content_width, global_max_width)
-    content_height = content_width * params.frame_aspect
-    return int(content_width), int(content_height)
+    lw, lh = layer_size
+    margin_x = min(lw * 0.3, w / 2)
+    margin_y = min(lh * 0.3, h / 2)
+    cx = rng.uniform(margin_x, max(w - margin_x, margin_x))
+    cy = rng.uniform(margin_y, max(h - margin_y, margin_y))
+    return cx, cy
 
 
 def generate_collage(image_paths: list[Path], params: CollageParams) -> Image.Image:
@@ -124,11 +115,10 @@ def generate_collage(image_paths: list[Path], params: CollageParams) -> Image.Im
     chosen = chosen[: params.max_photos]
 
     canvas_w, canvas_h = params.canvas_size
-    cols, rows, cell_w, cell_h = _grid(len(chosen), params.canvas_size)
-    content_width, content_height = _frame_content_size(cols, rows, cell_w, cell_h, params, canvas_w)
+    content_width, content_height = _frame_content_size(params, canvas_w)
 
     positioned: list[tuple[Image.Image, int, int]] = []
-    for i, path in enumerate(chosen):
+    for path in chosen:
         try:
             framed = _framed_photo(path, content_width, content_height, params)
         except Exception:
@@ -138,14 +128,13 @@ def generate_collage(image_paths: list[Path], params: CollageParams) -> Image.Im
         angle = rng.uniform(-params.max_rotation_deg, params.max_rotation_deg)
         layer = layer.rotate(angle, expand=True, resample=Image.BICUBIC)
 
-        col = i % cols
-        row = i // cols
-        cx = cell_w * (col + 0.5) + rng.uniform(-cell_w * 0.15, cell_w * 0.15)
-        cy = cell_h * (row + 0.5) + rng.uniform(-cell_h * 0.1, cell_h * 0.1)
+        cx, cy = _scatter_center(params.canvas_size, layer.size, rng)
         x = int(cx - layer.width / 2)
         y = int(cy - layer.height / 2)
         positioned.append((layer, x, y))
 
+    # orden aleatorio de dibujado, para que no siempre la ultima foto quede arriba de todas
+    rng.shuffle(positioned)
     for layer, x, y in positioned:
         canvas.alpha_composite(layer, dest=(x, y))
 
