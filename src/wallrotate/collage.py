@@ -22,6 +22,7 @@ class CollageParams:
     border_width: int = 16
     bottom_border_extra: int = 54  # borde inferior mas grueso, estilo polaroid
     photo_scale: float = 0.32  # ancho de cada foto como fraccion del ancho del canvas
+    frame_aspect: float = 0.72  # alto/ancho del area de foto dentro del marco (fijo, como un polaroid real)
     background: str = "blurred"  # "blurred" | "solid"
     background_color: tuple[int, int, int] = (24, 24, 26)
     background_blur_radius: int = 40
@@ -45,13 +46,13 @@ def _make_background(canvas_size: tuple[int, int], image_paths: list[Path], para
     return bg
 
 
-def _framed_photo(path: Path, target_width: int, params: CollageParams) -> Image.Image:
-    """Abre una foto, la redimensiona y le agrega marco tipo polaroid."""
+def _framed_photo(path: Path, content_width: int, content_height: int, params: CollageParams) -> Image.Image:
+    """Abre una foto y la recorta/escala para llenar un marco de tamano fijo
+    (como un polaroid real: el marco siempre mide lo mismo, sea la foto
+    vertical, horizontal o cuadrada)."""
     with Image.open(path) as im:
         im = ImageOps.exif_transpose(im.convert("RGB"))
-        ratio = im.height / im.width
-        target_height = int(target_width * ratio)
-        im = im.resize((target_width, max(target_height, 1)), Image.LANCZOS)
+        im = ImageOps.fit(im, (content_width, content_height), method=Image.LANCZOS)
 
     if not params.border:
         return im.convert("RGBA")
@@ -88,14 +89,26 @@ def _grid(n: int, canvas_size: tuple[int, int]) -> tuple[int, int, float, float]
     return cols, rows, w / cols, h / rows
 
 
-def _photo_aspect_ratio(path: Path) -> float | None:
-    """Alto/ancho de la imagen, leyendo solo el encabezado (rapido)."""
-    try:
-        with Image.open(path) as probe:
-            w, h = ImageOps.exif_transpose(probe).size
-            return h / w if w else None
-    except Exception:
-        return None
+def _frame_content_size(cols: int, rows: int, cell_w: float, cell_h: float, params: CollageParams, canvas_width: int) -> tuple[int, int]:
+    """Calcula el tamano (fijo, para todas las fotos) del area de imagen dentro
+    del marco, de forma que el marco completo (foto + borde + sombra) entre en
+    una celda de la grilla, respetando frame_aspect."""
+    border_extra_w = (params.border_width * 2) if params.border else 0
+    border_extra_h = (params.border_width * 2 + params.bottom_border_extra) if params.border else 0
+    shadow_pad = (params.shadow_blur * 3 + max(params.shadow_offset)) * 2 if params.shadow else 0
+
+    # margen de seguridad para el jitter de la posicion y para que no se toquen los bordes
+    max_frame_w = cell_w * 0.82 - border_extra_w - shadow_pad
+    max_frame_h = cell_h * 0.78 - border_extra_h - shadow_pad
+
+    # el ancho de contenido mas grande que respeta frame_aspect y entra en ambos limites
+    width_by_h_limit = max_frame_h / params.frame_aspect
+    content_width = max(min(max_frame_w, width_by_h_limit), 40)
+
+    global_max_width = canvas_width * params.photo_scale
+    content_width = min(content_width, global_max_width)
+    content_height = content_width * params.frame_aspect
+    return int(content_width), int(content_height)
 
 
 def generate_collage(image_paths: list[Path], params: CollageParams) -> Image.Image:
@@ -112,26 +125,12 @@ def generate_collage(image_paths: list[Path], params: CollageParams) -> Image.Im
 
     canvas_w, canvas_h = params.canvas_size
     cols, rows, cell_w, cell_h = _grid(len(chosen), params.canvas_size)
-    global_target_width = int(canvas_w * params.photo_scale)
-
-    # espacio fijo que suman el marco y la sombra, para descontarlo del alto disponible
-    border_extra_h = (params.border_width * 2 + params.bottom_border_extra) if params.border else 0
-    shadow_pad = (params.shadow_blur * 3 + max(params.shadow_offset)) * 2 if params.shadow else 0
-    # margen de seguridad para el jitter vertical de la posicion
-    max_row_height = cell_h * 0.8
+    content_width, content_height = _frame_content_size(cols, rows, cell_w, cell_h, params, canvas_w)
 
     positioned: list[tuple[Image.Image, int, int]] = []
     for i, path in enumerate(chosen):
-        ratio = _photo_aspect_ratio(path)
-        if ratio is None:
-            continue
-
-        max_content_h = max(max_row_height - border_extra_h - shadow_pad, 40)
-        width_for_row = int(max_content_h / ratio)
-        target_width = max(min(global_target_width, width_for_row), 40)
-
         try:
-            framed = _framed_photo(path, target_width, params)
+            framed = _framed_photo(path, content_width, content_height, params)
         except Exception:
             continue
         layer = _with_shadow(framed, params)
@@ -141,8 +140,8 @@ def generate_collage(image_paths: list[Path], params: CollageParams) -> Image.Im
 
         col = i % cols
         row = i // cols
-        cx = cell_w * (col + 0.5) + rng.uniform(-cell_w * 0.18, cell_w * 0.18)
-        cy = cell_h * (row + 0.5) + rng.uniform(-cell_h * 0.12, cell_h * 0.12)
+        cx = cell_w * (col + 0.5) + rng.uniform(-cell_w * 0.15, cell_w * 0.15)
+        cy = cell_h * (row + 0.5) + rng.uniform(-cell_h * 0.1, cell_h * 0.1)
         x = int(cx - layer.width / 2)
         y = int(cy - layer.height / 2)
         positioned.append((layer, x, y))
