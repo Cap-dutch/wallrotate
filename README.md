@@ -16,7 +16,7 @@ de fotos "esparcidas" tipo polaroid en su escritorio Linux.
 ## Por qué existe esto
 
 Hace años que me gusta tener de fondo de pantalla un collage con fotos de
-mis hijas y de mis pasiones — arrancó armándolos a mano en Photoshop y
+mis hijas y de mis pasiones "Airsoft" — arrancó armándolos a mano en Photoshop y
 otros editores, foto por foto, cada vez que quería cambiarlo. En algún
 momento encontré **John's Background Switcher** y fue un salto enorme:
 automatizaba todo eso que hacía manualmente.
