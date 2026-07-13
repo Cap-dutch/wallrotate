@@ -55,6 +55,8 @@ def _build_collage(profile: ScreenProfile) -> Path | None:
         shadow=profile.collage.shadow,
         border=profile.collage.border,
         photo_scale=profile.collage.photo_scale,
+        photo_fit=profile.collage.photo_fit,
+        min_spacing=profile.collage.min_spacing,
         background=profile.collage.background,
     )
     img = generate_collage(images, params)

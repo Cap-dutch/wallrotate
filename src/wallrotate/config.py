@@ -22,6 +22,8 @@ class CollageSettings:
     border: bool = True
     photo_scale: float = 0.32
     background: str = "blurred"  # "blurred" | "solid"
+    photo_fit: str = "contain"  # "contain" = foto completa con fondo blanco | "cover" = recorta y llena el marco
+    min_spacing: float = 0.55  # separacion minima entre fotos (0 = pueden superponerse del todo, 1+ = casi sin superposicion)
 
 
 @dataclass

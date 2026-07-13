@@ -69,6 +69,12 @@ SOURCE_LABELS = {
 }
 SOURCE_KEYS = {v: k for k, v in SOURCE_LABELS.items()}
 
+FIT_LABELS = {
+    "contain": "Foto completa (fondo blanco a los costados)",
+    "cover": "Recortar y llenar el marco",
+}
+FIT_KEYS = {v: k for k, v in FIT_LABELS.items()}
+
 FILL_LABELS = {
     "rellenar": "Rellenar (recorta)",
     "ajustar": "Ajustar (con bordes)",
@@ -139,8 +145,16 @@ class ScreenTab(QWidget):
         cform.addRow("", self.border_check)
 
         self.scale_slider = QSlider(Qt.Horizontal)
-        self.scale_slider.setRange(10, 60)
+        self.scale_slider.setRange(5, 100)
         cform.addRow("Tamano de cada foto (%):", self.scale_slider)
+
+        self.fit_combo = QComboBox()
+        self.fit_combo.addItems(FIT_LABELS.values())
+        cform.addRow("Foto dentro del marco:", self.fit_combo)
+
+        self.spacing_slider = QSlider(Qt.Horizontal)
+        self.spacing_slider.setRange(0, 150)
+        cform.addRow("Separacion minima entre fotos (%):", self.spacing_slider)
 
         self.background_combo = QComboBox()
         self.background_combo.addItems(["blurred", "solid"])
@@ -189,6 +203,8 @@ class ScreenTab(QWidget):
         self.shadow_check.setChecked(p.collage.shadow)
         self.border_check.setChecked(p.collage.border)
         self.scale_slider.setValue(int(p.collage.photo_scale * 100))
+        self.fit_combo.setCurrentText(FIT_LABELS.get(p.collage.photo_fit, FIT_LABELS["contain"]))
+        self.spacing_slider.setValue(int(p.collage.min_spacing * 100))
         self.background_combo.setCurrentText(p.collage.background)
         self.collage_box.setVisible(p.source_type == "collage")
 
@@ -205,6 +221,8 @@ class ScreenTab(QWidget):
         p.collage.shadow = self.shadow_check.isChecked()
         p.collage.border = self.border_check.isChecked()
         p.collage.photo_scale = self.scale_slider.value() / 100
+        p.collage.photo_fit = FIT_KEYS[self.fit_combo.currentText()]
+        p.collage.min_spacing = self.spacing_slider.value() / 100
         p.collage.background = self.background_combo.currentText()
         return p
 
@@ -223,6 +241,8 @@ class ScreenTab(QWidget):
                     shadow=profile.collage.shadow,
                     border=profile.collage.border,
                     photo_scale=profile.collage.photo_scale,
+                    photo_fit=profile.collage.photo_fit,
+                    min_spacing=profile.collage.min_spacing,
                     background=profile.collage.background,
                 )
                 img = generate_collage(images, params)
