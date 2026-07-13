@@ -5,7 +5,7 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-from PySide6.QtCore import Qt, QEvent
+from PySide6.QtCore import Qt, QEvent, QSize
 from PySide6.QtGui import QIcon, QPixmap
 from PySide6.QtWidgets import (
     QApplication,
@@ -37,13 +37,25 @@ from .config import load_state, save_state
 
 APP_ICON_PATH = Path(__file__).parent / "resources" / "icon.svg"
 APP_ICON_NAMES = ("preferences-desktop-wallpaper", "image-x-generic", "applications-graphics")
+# tamanos tipicos que pide el protocolo StatusNotifierItem (bandeja del sistema)
+_TRAY_ICON_SIZES = (16, 22, 24, 32, 48, 64, 128)
 
 
 def _app_icon() -> QIcon:
     if APP_ICON_PATH.exists():
-        icon = QIcon(str(APP_ICON_PATH))
-        if not icon.isNull():
-            return icon
+        # Renderizar el SVG a pixmaps concretos en los tamanos que pide la
+        # bandeja del sistema. Dejar que Qt convierta el SVG "al vuelo" al
+        # exportar el icono por D-Bus (StatusNotifierItem) da pixeles vacios
+        # en algunos tamanos (bug observado con QIcon(svg_path) directo).
+        renderer_icon = QIcon(str(APP_ICON_PATH))
+        if not renderer_icon.isNull():
+            icon = QIcon()
+            for size in _TRAY_ICON_SIZES:
+                pixmap = renderer_icon.pixmap(QSize(size, size))
+                if not pixmap.isNull():
+                    icon.addPixmap(pixmap)
+            if not icon.isNull():
+                return icon
     for name in APP_ICON_NAMES:
         icon = QIcon.fromTheme(name)
         if not icon.isNull():
