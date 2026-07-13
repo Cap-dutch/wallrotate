@@ -80,23 +80,22 @@ def _with_shadow(photo: Image.Image, params: CollageParams) -> Image.Image:
     return layer
 
 
-def _scatter_positions(n: int, canvas_size: tuple[int, int], photo_size: tuple[int, int], rng: random.Random) -> list[tuple[int, int]]:
-    """Reparte n posiciones en una grilla con jitter, para que las fotos queden esparcidas."""
+def _grid(n: int, canvas_size: tuple[int, int]) -> tuple[int, int, float, float]:
+    """Calcula columnas/filas y el tamano de celda para repartir n fotos en el canvas."""
     w, h = canvas_size
     cols = max(1, round((n * w / h) ** 0.5))
     rows = max(1, -(-n // cols))  # ceil
+    return cols, rows, w / cols, h / rows
 
-    cell_w, cell_h = w / cols, h / rows
-    positions = []
-    for i in range(n):
-        col = i % cols
-        row = i // cols
-        cx = cell_w * (col + 0.5) + rng.uniform(-cell_w * 0.22, cell_w * 0.22)
-        cy = cell_h * (row + 0.5) + rng.uniform(-cell_h * 0.22, cell_h * 0.22)
-        x = int(cx - photo_size[0] / 2)
-        y = int(cy - photo_size[1] / 2)
-        positions.append((x, y))
-    return positions
+
+def _photo_aspect_ratio(path: Path) -> float | None:
+    """Alto/ancho de la imagen, leyendo solo el encabezado (rapido)."""
+    try:
+        with Image.open(path) as probe:
+            w, h = ImageOps.exif_transpose(probe).size
+            return h / w if w else None
+    except Exception:
+        return None
 
 
 def generate_collage(image_paths: list[Path], params: CollageParams) -> Image.Image:
@@ -111,9 +110,26 @@ def generate_collage(image_paths: list[Path], params: CollageParams) -> Image.Im
     rng.shuffle(chosen)
     chosen = chosen[: params.max_photos]
 
-    target_width = int(params.canvas_size[0] * params.photo_scale)
-    layers: list[Image.Image] = []
-    for path in chosen:
+    canvas_w, canvas_h = params.canvas_size
+    cols, rows, cell_w, cell_h = _grid(len(chosen), params.canvas_size)
+    global_target_width = int(canvas_w * params.photo_scale)
+
+    # espacio fijo que suman el marco y la sombra, para descontarlo del alto disponible
+    border_extra_h = (params.border_width * 2 + params.bottom_border_extra) if params.border else 0
+    shadow_pad = (params.shadow_blur * 3 + max(params.shadow_offset)) * 2 if params.shadow else 0
+    # margen de seguridad para el jitter vertical de la posicion
+    max_row_height = cell_h * 0.8
+
+    positioned: list[tuple[Image.Image, int, int]] = []
+    for i, path in enumerate(chosen):
+        ratio = _photo_aspect_ratio(path)
+        if ratio is None:
+            continue
+
+        max_content_h = max(max_row_height - border_extra_h - shadow_pad, 40)
+        width_for_row = int(max_content_h / ratio)
+        target_width = max(min(global_target_width, width_for_row), 40)
+
         try:
             framed = _framed_photo(path, target_width, params)
         except Exception:
@@ -122,12 +138,16 @@ def generate_collage(image_paths: list[Path], params: CollageParams) -> Image.Im
 
         angle = rng.uniform(-params.max_rotation_deg, params.max_rotation_deg)
         layer = layer.rotate(angle, expand=True, resample=Image.BICUBIC)
-        layers.append(layer)
 
-    approx_size = (target_width, int(target_width * 0.75))
-    positions = _scatter_positions(len(layers), params.canvas_size, approx_size, rng)
+        col = i % cols
+        row = i // cols
+        cx = cell_w * (col + 0.5) + rng.uniform(-cell_w * 0.18, cell_w * 0.18)
+        cy = cell_h * (row + 0.5) + rng.uniform(-cell_h * 0.12, cell_h * 0.12)
+        x = int(cx - layer.width / 2)
+        y = int(cy - layer.height / 2)
+        positioned.append((layer, x, y))
 
-    for layer, (x, y) in zip(layers, positions):
+    for layer, x, y in positioned:
         canvas.alpha_composite(layer, dest=(x, y))
 
     return canvas.convert("RGB")
