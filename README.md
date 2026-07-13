@@ -8,10 +8,10 @@ Nace como reemplazo de [John's Background Switcher](https://johnsad.ventures/sof
 (Windows/macOS, sin versión Linux) para quienes quieren ese mismo efecto
 de fotos "esparcidas" tipo polaroid en su escritorio Linux.
 
-<!-- Capturas de ejemplo — reemplazar con imágenes propias sin contenido sensible
-![Vista de la app](docs/screenshot-app.png)
-![Ejemplo de collage generado](docs/screenshot-collage.png)
--->
+![Collages generados por WallRotate](docs/screenshot-collages-banner.jpg)
+
+![Configurando el collage para el monitor DP-1](docs/screenshot-app-santiago.jpg)
+![Configurando el collage para el monitor HDMI-A-1](docs/screenshot-app-carpinteria.jpg)
 
 ## Features
 
