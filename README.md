@@ -119,6 +119,7 @@ Python 3.13 · [PySide6](https://doc.qt.io/qtforpython/) (GUI) ·
 ## Estado del proyecto
 
 Funcional, en uso diario propio. Sin tests automatizados todavía.
+Historial de cambios en [CHANGELOG.md](CHANGELOG.md).
 
 ### Pendientes conocidos
 
