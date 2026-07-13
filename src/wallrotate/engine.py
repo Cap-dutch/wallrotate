@@ -1,4 +1,10 @@
-"""Motor de rotacion: revisa los perfiles y aplica el siguiente fondo si corresponde."""
+"""Motor de rotacion: revisa los perfiles y aplica el siguiente fondo si corresponde.
+
+Tambien expone funciones para las acciones manuales del icono de bandeja:
+siguiente/anterior fondo, pausar, y consultar la imagen actual. El historial
+de fondos aplicados se guarda en state.json para poder navegar hacia atras
+sin tener que regenerar nada.
+"""
 
 from __future__ import annotations
 
@@ -9,12 +15,20 @@ from pathlib import Path
 
 from . import plasma_bridge
 from .collage import CollageParams, generate_collage
-from .config import CACHE_DIR, ScreenProfile, load_config, load_state, save_state
+from .config import (
+    CACHE_DIR,
+    ScreenProfile,
+    load_config,
+    load_state,
+    save_config,
+    save_state,
+)
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger("wallrotate.engine")
 
 IMAGE_EXTENSIONS = (".jpg", ".jpeg", ".png", ".webp", ".bmp")
+MAX_HISTORY = 30
 
 
 def _list_images(folder: Path) -> list[Path]:
@@ -29,12 +43,10 @@ def _pick_next_image(profile: ScreenProfile, state: dict) -> Path | None:
         log.warning("Sin imagenes en %s (pantalla %s)", profile.source_path, profile.desktop_index)
         return None
 
-    key = f"last_image_{profile.desktop_index}"
-    last = state.get(key)
+    history = _get_history(state, profile.desktop_index)
+    last = history[-1] if history else None
     choices = [p for p in images if str(p) != last] or images
-    chosen = random.choice(choices)
-    state[key] = str(chosen)
-    return chosen
+    return random.choice(choices)
 
 
 def _build_collage(profile: ScreenProfile) -> Path | None:
@@ -69,36 +81,59 @@ def _build_collage(profile: ScreenProfile) -> Path | None:
     return out_path
 
 
-def _cleanup_old_collages(desktop_index: int, keep: Path) -> None:
-    for old in CACHE_DIR.glob(f"collage_{desktop_index}_*.png"):
-        if old != keep:
-            old.unlink(missing_ok=True)
+def _generate_new(profile: ScreenProfile, state: dict) -> Path | None:
+    """Elige/genera una imagen NUEVA (no del historial) para el perfil."""
+    if profile.source_type == "single_image":
+        image_path = Path(profile.source_path)
+        return image_path if image_path.is_file() else None
+    if profile.source_type == "folder_slideshow":
+        return _pick_next_image(profile, state)
+    if profile.source_type == "collage":
+        return _build_collage(profile)
+    log.warning("source_type desconocido: %s", profile.source_type)
+    return None
+
+
+# --- historial ---------------------------------------------------------
+
+def _get_history(state: dict, desktop_index: int) -> list[str]:
+    return state.get(f"history_{desktop_index}", [])
+
+
+def _get_position(state: dict, desktop_index: int) -> int:
+    history = _get_history(state, desktop_index)
+    return state.get(f"position_{desktop_index}", max(len(history) - 1, 0))
+
+
+def _push_history(state: dict, desktop_index: int, path: Path) -> None:
+    history = _get_history(state, desktop_index)
+    history.append(str(path))
+
+    while len(history) > MAX_HISTORY:
+        old = history.pop(0)
+        old_path = Path(old)
+        if old_path.parent == CACHE_DIR:
+            old_path.unlink(missing_ok=True)
+
+    state[f"history_{desktop_index}"] = history
+    state[f"position_{desktop_index}"] = len(history) - 1
+
+
+# --- aplicar -------------------------------------------------------------
+
+def _apply_path(profile: ScreenProfile, path: Path, state: dict) -> None:
+    plasma_bridge.set_wallpaper(profile.desktop_index, path, fill_mode=profile.fill_mode)
+    state[f"last_applied_{profile.desktop_index}"] = time.time()
+    log.info("Pantalla %s -> %s", profile.desktop_index, path)
 
 
 def apply_profile(profile: ScreenProfile, state: dict) -> None:
-    if profile.source_type == "single_image":
-        image_path = Path(profile.source_path)
-        if not image_path.is_file():
-            log.warning("Imagen no encontrada: %s", profile.source_path)
-            return
-    elif profile.source_type == "folder_slideshow":
-        image_path = _pick_next_image(profile, state)
-        if image_path is None:
-            return
-    elif profile.source_type == "collage":
-        image_path = _build_collage(profile)
-        if image_path is None:
-            return
-    else:
-        log.warning("source_type desconocido: %s", profile.source_type)
+    """Genera y aplica un fondo nuevo, agregandolo al historial."""
+    image_path = _generate_new(profile, state)
+    if image_path is None:
         return
-
-    plasma_bridge.set_wallpaper(profile.desktop_index, image_path, fill_mode=profile.fill_mode)
-    state[f"last_applied_{profile.desktop_index}"] = time.time()
-    log.info("Pantalla %s -> %s", profile.desktop_index, image_path)
-
-    if profile.source_type == "collage":
-        _cleanup_old_collages(profile.desktop_index, keep=image_path)
+    _apply_path(profile, image_path, state)
+    _push_history(state, profile.desktop_index, image_path)
 
 
 def run_once(force: bool = False) -> None:
@@ -107,7 +142,7 @@ def run_once(force: bool = False) -> None:
     now = time.time()
 
     for profile in config.profiles:
-        if not profile.enabled or not profile.source_path:
+        if not profile.enabled or not profile.source_path or profile.paused:
             continue
         last_applied = state.get(f"last_applied_{profile.desktop_index}", 0)
         due = force or (now - last_applied) >= profile.interval_minutes * 60
@@ -115,6 +150,78 @@ def run_once(force: bool = False) -> None:
             apply_profile(profile, state)
 
     save_state(state)
+
+
+# --- acciones manuales (menu de bandeja) ---------------------------------
+
+def go_next(desktop_index: int) -> bool:
+    """Avanza al siguiente fondo: si hay uno mas nuevo en el historial lo
+    reaplica, si no, genera uno nuevo."""
+    config = load_config()
+    profile = config.profile_for(desktop_index)
+    if profile is None or not profile.source_path:
+        return False
+
+    state = load_state()
+    history = _get_history(state, desktop_index)
+    position = _get_position(state, desktop_index)
+
+    if position < len(history) - 1:
+        position += 1
+        _apply_path(profile, Path(history[position]), state)
+        state[f"position_{desktop_index}"] = position
+    else:
+        image_path = _generate_new(profile, state)
+        if image_path is None:
+            return False
+        _apply_path(profile, image_path, state)
+        _push_history(state, desktop_index, image_path)
+
+    save_state(state)
+    return True
+
+
+def go_previous(desktop_index: int) -> bool:
+    """Vuelve al fondo anterior del historial, si existe."""
+    config = load_config()
+    profile = config.profile_for(desktop_index)
+    if profile is None:
+        return False
+
+    state = load_state()
+    history = _get_history(state, desktop_index)
+    position = _get_position(state, desktop_index)
+
+    if position <= 0 or not history:
+        log.info("Pantalla %s: no hay fondo anterior en el historial", desktop_index)
+        return False
+
+    position -= 1
+    _apply_path(profile, Path(history[position]), state)
+    state[f"position_{desktop_index}"] = position
+    save_state(state)
+    return True
+
+
+def toggle_pause(desktop_index: int) -> bool:
+    """Pausa/reanuda la rotacion automatica de una pantalla. Devuelve el
+    nuevo estado (True = pausado)."""
+    config = load_config()
+    profile = config.profile_for(desktop_index)
+    if profile is None:
+        return False
+    profile.paused = not profile.paused
+    save_config(config)
+    return profile.paused
+
+
+def current_image_path(desktop_index: int) -> Path | None:
+    state = load_state()
+    history = _get_history(state, desktop_index)
+    position = _get_position(state, desktop_index)
+    if not history or position < 0 or position >= len(history):
+        return None
+    return Path(history[position])
 
 
 def main() -> None:

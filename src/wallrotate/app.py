@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import shutil
+import subprocess
 import sys
 from pathlib import Path
 
@@ -31,8 +33,8 @@ from PySide6.QtWidgets import (
 
 from . import plasma_bridge
 from .collage import CollageParams, generate_collage
-from .config import Config, ScreenProfile, load_config, save_config
-from .engine import apply_profile, run_once
+from .config import CACHE_DIR, Config, ScreenProfile, load_config, save_config
+from .engine import apply_profile, current_image_path, go_next, go_previous, run_once, toggle_pause
 from .config import load_state, save_state
 
 APP_ICON_PATH = Path(__file__).parent / "resources" / "icon.svg"
@@ -312,12 +314,46 @@ class MainWindow(QMainWindow):
     def _setup_tray(self) -> None:
         self.tray = QSystemTrayIcon(_app_icon(), self)
         self.tray.setToolTip("WallRotate")
+        self._pause_actions: dict[int, "QAction"] = {}
 
         menu = QMenu()
         show_action = menu.addAction("Abrir")
         show_action.triggered.connect(self._show_from_tray)
-        rotate_action = menu.addAction("Rotar ahora")
+        rotate_action = menu.addAction("Rotar ahora (todas)")
         rotate_action.triggered.connect(self._rotate_now_all)
+        menu.addSeparator()
+
+        for screen in self.screens:
+            idx = screen.desktop_index
+            submenu = menu.addMenu(screen.name)
+
+            next_action = submenu.addAction("Siguiente fondo")
+            next_action.triggered.connect(lambda checked=False, i=idx: self._next_screen(i))
+
+            prev_action = submenu.addAction("Fondo anterior")
+            prev_action.triggered.connect(lambda checked=False, i=idx: self._previous_screen(i))
+
+            submenu.addSeparator()
+
+            pause_action = submenu.addAction("Pausar rotacion")
+            pause_action.setCheckable(True)
+            profile = self.config.profile_for(idx)
+            pause_action.setChecked(bool(profile and profile.paused))
+            pause_action.triggered.connect(lambda checked=False, i=idx: self._toggle_pause_screen(i))
+            self._pause_actions[idx] = pause_action
+
+            submenu.addSeparator()
+
+            view_action = submenu.addAction("Ver imagen actual")
+            view_action.triggered.connect(lambda checked=False, i=idx: self._view_current(i))
+
+            save_action = submenu.addAction("Guardar imagen actual como...")
+            save_action.triggered.connect(lambda checked=False, i=idx: self._save_current_as(i))
+
+        menu.addSeparator()
+        cache_action = menu.addAction("Navegador de imagenes en cache")
+        cache_action.triggered.connect(self._open_cache_browser)
+
         menu.addSeparator()
         quit_action = menu.addAction("Salir")
         quit_action.triggered.connect(self._quit)
@@ -325,6 +361,44 @@ class MainWindow(QMainWindow):
         self.tray.setContextMenu(menu)
         self.tray.activated.connect(self._on_tray_activated)
         self.tray.show()
+
+    def _next_screen(self, desktop_index: int) -> None:
+        if go_next(desktop_index):
+            self.tray.showMessage("WallRotate", "Siguiente fondo aplicado.", QSystemTrayIcon.MessageIcon.Information, 2000)
+        else:
+            self.tray.showMessage("WallRotate", "No se pudo avanzar (revisa la carpeta configurada).", QSystemTrayIcon.MessageIcon.Warning, 3000)
+
+    def _previous_screen(self, desktop_index: int) -> None:
+        if not go_previous(desktop_index):
+            self.tray.showMessage("WallRotate", "No hay un fondo anterior guardado todavia.", QSystemTrayIcon.MessageIcon.Information, 2500)
+
+    def _toggle_pause_screen(self, desktop_index: int) -> None:
+        paused = toggle_pause(desktop_index)
+        action = self._pause_actions.get(desktop_index)
+        if action is not None:
+            action.setChecked(paused)
+        estado = "pausada" if paused else "reanudada"
+        self.tray.showMessage("WallRotate", f"Rotacion {estado}.", QSystemTrayIcon.MessageIcon.Information, 2000)
+
+    def _view_current(self, desktop_index: int) -> None:
+        path = current_image_path(desktop_index)
+        if path is None or not path.exists():
+            QMessageBox.information(self, "Sin imagen", "Todavia no hay una imagen aplicada en esta pantalla.")
+            return
+        subprocess.Popen(["xdg-open", str(path)])
+
+    def _save_current_as(self, desktop_index: int) -> None:
+        path = current_image_path(desktop_index)
+        if path is None or not path.exists():
+            QMessageBox.information(self, "Sin imagen", "Todavia no hay una imagen aplicada en esta pantalla.")
+            return
+        dest, _ = QFileDialog.getSaveFileName(self, "Guardar imagen como...", str(Path.home() / path.name), "Imagen (*.png *.jpg *.jpeg)")
+        if dest:
+            shutil.copy(path, dest)
+
+    def _open_cache_browser(self) -> None:
+        CACHE_DIR.mkdir(parents=True, exist_ok=True)
+        subprocess.Popen(["xdg-open", str(CACHE_DIR)])
 
     def _on_tray_activated(self, reason) -> None:
         if reason == QSystemTrayIcon.ActivationReason.Trigger:

@@ -35,6 +35,7 @@ class ScreenProfile:
     source_path: str = ""
     interval_minutes: int = 30
     fill_mode: str = "rellenar"
+    paused: bool = False
     collage: CollageSettings = field(default_factory=CollageSettings)
 
     @classmethod
