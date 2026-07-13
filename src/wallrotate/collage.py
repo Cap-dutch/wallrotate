@@ -22,11 +22,13 @@ class CollageParams:
     border_width: int = 16
     bottom_border_extra: int = 54  # borde inferior mas grueso, estilo polaroid
     photo_scale: float = 0.32  # ancho de cada foto como fraccion del ancho del canvas
-    frame_aspect: float = 0.72  # alto/ancho del area de foto dentro del marco (fijo, como un polaroid real)
+    frame_aspect: float = 1.0  # alto/ancho del area de foto dentro del marco (1.0 = cuadrado, como un polaroid real)
+    photo_fit: str = "contain"  # "contain" = se ve la foto completa (con fondo blanco a los costados) | "cover" = recorta para llenar el marco
     background: str = "blurred"  # "blurred" | "solid"
     background_color: tuple[int, int, int] = (24, 24, 26)
     background_blur_radius: int = 40
     background_darken: float = 0.55  # 1.0 = sin oscurecer, 0.0 = negro
+    min_spacing: float = 0.55  # distancia minima entre centros de fotos, como fraccion del tamano del marco (0 = sin restriccion, permite superposicion total)
     seed: int | None = None
 
 
@@ -47,12 +49,20 @@ def _make_background(canvas_size: tuple[int, int], image_paths: list[Path], para
 
 
 def _framed_photo(path: Path, content_width: int, content_height: int, params: CollageParams) -> Image.Image:
-    """Abre una foto y la recorta/escala para llenar un marco de tamano fijo
-    (como un polaroid real: el marco siempre mide lo mismo, sea la foto
-    vertical, horizontal o cuadrada)."""
+    """Abre una foto y la ubica en un marco de tamano fijo (como un polaroid
+    real: el marco siempre mide lo mismo, sea la foto vertical, horizontal o
+    cuadrada). En modo "contain" se ve la foto completa, sin recortar, con
+    fondo blanco donde sobre espacio; en "cover" se recorta para llenar todo
+    el marco."""
     with Image.open(path) as im:
         im = ImageOps.exif_transpose(im.convert("RGB"))
-        im = ImageOps.fit(im, (content_width, content_height), method=Image.LANCZOS)
+        if params.photo_fit == "cover":
+            im = ImageOps.fit(im, (content_width, content_height), method=Image.LANCZOS)
+        else:
+            fitted = ImageOps.contain(im, (content_width, content_height), method=Image.LANCZOS)
+            canvas = Image.new("RGB", (content_width, content_height), (250, 250, 248))
+            canvas.paste(fitted, ((content_width - fitted.width) // 2, (content_height - fitted.height) // 2))
+            im = canvas
 
     if not params.border:
         return im.convert("RGBA")
@@ -89,17 +99,38 @@ def _frame_content_size(params: CollageParams, canvas_width: int) -> tuple[int, 
     return content_width, content_height
 
 
-def _scatter_center(canvas_size: tuple[int, int], layer_size: tuple[int, int], rng: random.Random) -> tuple[float, float]:
-    """Elige un centro al azar en todo el canvas, dejando que las fotos se
-    superpongan libremente (estilo pila real), con un margen para que la
-    mayor parte de cada foto quede visible."""
+def _scatter_center(
+    canvas_size: tuple[int, int],
+    layer_size: tuple[int, int],
+    rng: random.Random,
+    existing: list[tuple[float, float]],
+    min_dist: float,
+    attempts: int = 25,
+) -> tuple[float, float]:
+    """Elige un centro al azar en todo el canvas (estilo pila real), evitando
+    quedar demasiado cerca de fotos ya colocadas -- permite superposicion
+    parcial (da el aspecto de pila) pero no que una foto tape a otra por
+    completo. Si no encuentra un lugar libre tras varios intentos, usa el
+    mejor candidato encontrado."""
     w, h = canvas_size
     lw, lh = layer_size
     margin_x = min(lw * 0.3, w / 2)
     margin_y = min(lh * 0.3, h / 2)
-    cx = rng.uniform(margin_x, max(w - margin_x, margin_x))
-    cy = rng.uniform(margin_y, max(h - margin_y, margin_y))
-    return cx, cy
+
+    best_pos = None
+    best_score = -1.0
+    for _ in range(attempts):
+        cx = rng.uniform(margin_x, max(w - margin_x, margin_x))
+        cy = rng.uniform(margin_y, max(h - margin_y, margin_y))
+        if not existing:
+            return cx, cy
+        nearest = min(((cx - ex) ** 2 + (cy - ey) ** 2) ** 0.5 for ex, ey in existing)
+        if nearest >= min_dist:
+            return cx, cy
+        if nearest > best_score:
+            best_score = nearest
+            best_pos = (cx, cy)
+    return best_pos
 
 
 def generate_collage(image_paths: list[Path], params: CollageParams) -> Image.Image:
@@ -118,6 +149,7 @@ def generate_collage(image_paths: list[Path], params: CollageParams) -> Image.Im
     content_width, content_height = _frame_content_size(params, canvas_w)
 
     positioned: list[tuple[Image.Image, int, int]] = []
+    centers: list[tuple[float, float]] = []
     for path in chosen:
         try:
             framed = _framed_photo(path, content_width, content_height, params)
@@ -128,7 +160,9 @@ def generate_collage(image_paths: list[Path], params: CollageParams) -> Image.Im
         angle = rng.uniform(-params.max_rotation_deg, params.max_rotation_deg)
         layer = layer.rotate(angle, expand=True, resample=Image.BICUBIC)
 
-        cx, cy = _scatter_center(params.canvas_size, layer.size, rng)
+        min_dist = max(content_width, content_height) * params.min_spacing
+        cx, cy = _scatter_center(params.canvas_size, layer.size, rng, centers, min_dist)
+        centers.append((cx, cy))
         x = int(cx - layer.width / 2)
         y = int(cy - layer.height / 2)
         positioned.append((layer, x, y))
