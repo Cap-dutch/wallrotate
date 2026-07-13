@@ -13,6 +13,20 @@ de fotos "esparcidas" tipo polaroid en su escritorio Linux.
 ![Configurando el collage para el monitor DP-1](docs/screenshot-app-santiago.jpg)
 ![Configurando el collage para el monitor HDMI-A-1](docs/screenshot-app-carpinteria.jpg)
 
+## Por qué existe esto
+
+Hace años que me gusta tener de fondo de pantalla un collage con fotos de
+mis hijas y de mis pasiones — arrancó armándolos a mano en Photoshop y
+otros editores, foto por foto, cada vez que quería cambiarlo. En algún
+momento encontré **John's Background Switcher** y fue un salto enorme:
+automatizaba todo eso que hacía manualmente.
+
+El problema llegó con el cambio definitivo a Linux: JBS es Windows/macOS
+únicamente, y por más que busqué no encontré ningún reemplazo real para
+KDE Plasma que hiciera ese mismo efecto de "pila de fotos". Así que,
+con la ayuda de [Claude Code](https://claude.com/claude-code), terminé
+armando el mío.
+
 ## Features
 
 - **Por monitor**: cada pantalla conectada tiene su propio perfil independiente (detecta automáticamente cuántos monitores tenés).
@@ -105,13 +119,22 @@ Python 3.13 · [PySide6](https://doc.qt.io/qtforpython/) (GUI) ·
 ## Estado del proyecto
 
 Funcional, en uso diario propio. Sin tests automatizados todavía.
-Desarrollado con asistencia de [Claude Code](https://claude.com/claude-code).
 
 ### Pendientes conocidos
 
 - Resolución del timer de 1 minuto — intervalos menores no aplican.
 - No maneja hot-plug de monitores mientras la GUI está abierta.
 - El modo de ajuste "mosaico" no está probado a fondo.
+
+## Créditos
+
+- **[John's Background Switcher](https://johnsad.ventures/software/backgroundswitcher/)**
+  es la inspiración directa de este proyecto — el modo collage, el menú
+  de bandeja con Siguiente/Anterior/Pausar, y la idea de rotar por
+  carpeta salen de ahí. No comparte código (JBS es .NET cerrado, sin
+  versión Linux), pero sin ese programa esto no existiría. Si usás
+  Windows o macOS, es la opción más completa y madura.
+- Desarrollado con [Claude Code](https://claude.com/claude-code).
 
 ## Licencia
 
