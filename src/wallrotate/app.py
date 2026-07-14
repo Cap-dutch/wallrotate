@@ -29,6 +29,7 @@ from PySide6.QtWidgets import (
     QSpinBox,
     QSystemTrayIcon,
     QTabWidget,
+    QTextBrowser,
     QVBoxLayout,
     QWidget,
 )
@@ -378,11 +379,13 @@ class AboutDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Acerca de WallRotate")
-        self.setMinimumWidth(420)
+        self.resize(460, 480)
 
         layout = QVBoxLayout(self)
 
-        about_label = QLabel(
+        browser = QTextBrowser()
+        browser.setOpenExternalLinks(True)
+        browser.setHtml(
             f"<h3>WallRotate {_wallrotate_version()}</h3>"
             "<p>Rotador de fondos de pantalla por monitor para KDE Plasma, con "
             "generador de collage tipo \"pila de fotos\" a partir de tus propias "
@@ -392,12 +395,6 @@ class AboutDialog(QDialog):
             "Background Switcher</a> (Windows/macOS, sin version Linux).</p>"
             "<p>Licencia MIT — codigo en "
             "<a href=\"https://github.com/Cap-dutch/wallrotate\">github.com/Cap-dutch/wallrotate</a>.</p>"
-        )
-        about_label.setWordWrap(True)
-        about_label.setOpenExternalLinks(True)
-        layout.addWidget(about_label)
-
-        help_label = QLabel(
             "<h3>Ayuda</h3>"
             "<ul>"
             "<li>Cada pestaña es un monitor detectado: elegí fuente (imagen fija, "
@@ -411,8 +408,7 @@ class AboutDialog(QDialog):
             "la pone de fondo en esa pantalla.</li>"
             "</ul>"
         )
-        help_label.setWordWrap(True)
-        layout.addWidget(help_label)
+        layout.addWidget(browser)
 
         close_btn = QPushButton("Cerrar")
         close_btn.clicked.connect(self.accept)
@@ -456,8 +452,16 @@ class MainWindow(QMainWindow):
         save_row.addWidget(save_btn)
 
         about_btn = QPushButton("?")
-        about_btn.setFixedSize(30, 30)
-        about_btn.setStyleSheet("border-radius: 15px;")
+        about_btn.setFixedSize(34, 34)
+        about_btn.setStyleSheet(
+            "QPushButton {"
+            "  border-radius: 17px;"
+            "  border: 2px solid #3daee9;"
+            "  font-weight: bold;"
+            "  font-size: 16px;"
+            "}"
+            "QPushButton:hover { background: rgba(61, 174, 233, 60); }"
+        )
         about_btn.setToolTip("Ayuda / Acerca de")
         about_btn.clicked.connect(self._show_about)
         save_row.addWidget(about_btn)
