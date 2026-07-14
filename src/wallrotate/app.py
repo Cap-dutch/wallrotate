@@ -33,9 +33,33 @@ from PySide6.QtWidgets import (
 
 from . import plasma_bridge
 from .collage import CollageParams, generate_collage
-from .config import CACHE_DIR, Config, ScreenProfile, load_config, save_config
+from .config import CACHE_DIR, CONFIG_PATH, Config, ScreenProfile, load_config, save_config
 from .engine import apply_profile, current_image_path, go_next, go_previous, run_once, toggle_pause
 from .config import load_state, save_state
+
+AUTOSTART_PATH = Path.home() / ".config" / "autostart" / "wallrotate.desktop"
+_AUTOSTART_CONTENT = """[Desktop Entry]
+Type=Application
+Name=WallRotate
+Comment=Rotador de fondos de pantalla con collage, por monitor
+Exec=wallrotate
+Icon=preferences-desktop-wallpaper
+Terminal=false
+Categories=Utility;DesktopSettings;
+X-GNOME-Autostart-enabled=true
+"""
+
+
+def is_autostart_enabled() -> bool:
+    return AUTOSTART_PATH.exists()
+
+
+def set_autostart(enabled: bool) -> None:
+    if enabled:
+        AUTOSTART_PATH.parent.mkdir(parents=True, exist_ok=True)
+        AUTOSTART_PATH.write_text(_AUTOSTART_CONTENT)
+    else:
+        AUTOSTART_PATH.unlink(missing_ok=True)
 
 APP_ICON_PATH = Path(__file__).parent / "resources" / "icon.svg"
 APP_ICON_NAMES = ("preferences-desktop-wallpaper", "image-x-generic", "applications-graphics")
@@ -286,6 +310,7 @@ class MainWindow(QMainWindow):
         self.resize(720, 640)
         self.setWindowIcon(_app_icon())
         self._really_quit = False
+        is_first_run = not CONFIG_PATH.exists()
 
         self.config = load_config()
         self.screens = plasma_bridge.list_screens()
@@ -304,12 +329,36 @@ class MainWindow(QMainWindow):
         layout = QVBoxLayout(central)
         layout.addWidget(self.tabs)
 
+        self.autostart_check = QCheckBox("Iniciar automaticamente con el sistema")
+        self.autostart_check.setChecked(is_autostart_enabled())
+        self.autostart_check.toggled.connect(self._on_autostart_toggled)
+        layout.addWidget(self.autostart_check)
+
         save_btn = QPushButton("Guardar configuracion")
         save_btn.clicked.connect(self._save)
         layout.addWidget(save_btn)
 
         self.setCentralWidget(central)
         self._setup_tray()
+
+        if is_first_run:
+            self._ask_autostart_first_run()
+
+    def _on_autostart_toggled(self, checked: bool) -> None:
+        set_autostart(checked)
+
+    def _ask_autostart_first_run(self) -> None:
+        answer = QMessageBox.question(
+            self,
+            "Autoarranque",
+            "¿Queres que WallRotate arranque automaticamente cada vez que inicies sesion?\n\n"
+            "Podes cambiar esto despues con el casillero de la ventana principal.",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.Yes,
+        )
+        enabled = answer == QMessageBox.Yes
+        set_autostart(enabled)
+        self.autostart_check.setChecked(enabled)
 
     def _setup_tray(self) -> None:
         self.tray = QSystemTrayIcon(_app_icon(), self)
