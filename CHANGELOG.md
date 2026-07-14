@@ -17,6 +17,10 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
   diagonal en ambos sentidos, en X, y óvalo (sobre el borde o
   rellenando el interior). Nuevo selector "Distribución de fotos" y
   controles asociados en los parámetros del collage de la GUI.
+- Botón "?" junto a "Guardar configuración" con un diálogo "Acerca de
+  WallRotate" (versión, crédito a John's Background Switcher, licencia
+  MIT, link al repo) y una sección de Ayuda con el uso básico de la
+  app (pestañas por monitor, menú de bandeja, timer en segundo plano).
 
 ## [0.1.0] - 2026-07-12
 

@@ -5,6 +5,7 @@ from __future__ import annotations
 import shutil
 import subprocess
 import sys
+from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 
 from PySide6.QtCore import Qt, QEvent, QSize
@@ -13,6 +14,7 @@ from PySide6.QtWidgets import (
     QApplication,
     QCheckBox,
     QComboBox,
+    QDialog,
     QFileDialog,
     QFormLayout,
     QGroupBox,
@@ -365,6 +367,58 @@ class ScreenTab(QWidget):
         QMessageBox.information(self, "Listo", f"Fondo aplicado en {self.screen.name}.")
 
 
+def _wallrotate_version() -> str:
+    try:
+        return version("wallrotate")
+    except PackageNotFoundError:
+        return "dev"
+
+
+class AboutDialog(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Acerca de WallRotate")
+        self.setMinimumWidth(420)
+
+        layout = QVBoxLayout(self)
+
+        about_label = QLabel(
+            f"<h3>WallRotate {_wallrotate_version()}</h3>"
+            "<p>Rotador de fondos de pantalla por monitor para KDE Plasma, con "
+            "generador de collage tipo \"pila de fotos\" a partir de tus propias "
+            "imagenes.</p>"
+            "<p>Inspirado en "
+            "<a href=\"https://johnsad.ventures/software/backgroundswitcher/\">John's "
+            "Background Switcher</a> (Windows/macOS, sin version Linux).</p>"
+            "<p>Licencia MIT — codigo en "
+            "<a href=\"https://github.com/Cap-dutch/wallrotate\">github.com/Cap-dutch/wallrotate</a>.</p>"
+        )
+        about_label.setWordWrap(True)
+        about_label.setOpenExternalLinks(True)
+        layout.addWidget(about_label)
+
+        help_label = QLabel(
+            "<h3>Ayuda</h3>"
+            "<ul>"
+            "<li>Cada pestaña es un monitor detectado: elegí fuente (imagen fija, "
+            "carpeta en slideshow o collage), intervalo y ajuste, y guardá.</li>"
+            "<li>El icono de la bandeja del sistema tiene, por pantalla, "
+            "Siguiente fondo / Fondo anterior / Pausar / Ver imagen actual / "
+            "Guardar imagen actual.</li>"
+            "<li>La rotación automática corre en segundo plano vía systemd timer, "
+            "aunque cierres esta ventana (cerrar solo la oculta).</li>"
+            "<li>\"Vista previa\" genera la imagen sin aplicarla; \"Aplicar ahora\" "
+            "la pone de fondo en esa pantalla.</li>"
+            "</ul>"
+        )
+        help_label.setWordWrap(True)
+        layout.addWidget(help_label)
+
+        close_btn = QPushButton("Cerrar")
+        close_btn.clicked.connect(self.accept)
+        layout.addWidget(close_btn)
+
+
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -396,9 +450,19 @@ class MainWindow(QMainWindow):
         self.autostart_check.toggled.connect(self._on_autostart_toggled)
         layout.addWidget(self.autostart_check)
 
+        save_row = QHBoxLayout()
         save_btn = QPushButton("Guardar configuracion")
         save_btn.clicked.connect(self._save)
-        layout.addWidget(save_btn)
+        save_row.addWidget(save_btn)
+
+        about_btn = QPushButton("?")
+        about_btn.setFixedSize(30, 30)
+        about_btn.setStyleSheet("border-radius: 15px;")
+        about_btn.setToolTip("Ayuda / Acerca de")
+        about_btn.clicked.connect(self._show_about)
+        save_row.addWidget(about_btn)
+
+        layout.addLayout(save_row)
 
         self.setCentralWidget(central)
         self._setup_tray()
@@ -408,6 +472,9 @@ class MainWindow(QMainWindow):
 
     def _on_autostart_toggled(self, checked: bool) -> None:
         set_autostart(checked)
+
+    def _show_about(self) -> None:
+        AboutDialog(self).exec()
 
     def _ask_autostart_first_run(self) -> None:
         answer = QMessageBox.question(
