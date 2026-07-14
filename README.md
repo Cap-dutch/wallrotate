@@ -37,9 +37,12 @@ armando el mío.
 - **Intervalo configurable** por pantalla (en minutos).
 - **Modo de ajuste de imagen**: rellenar, ajustar, estirar, centrado, mosaico.
 - **Parámetros de collage ajustables**: cantidad de fotos, ángulo máximo de rotación, sombra on/off, marco on/off, tamaño relativo de cada foto, tipo de fondo (difuminado o color sólido).
+- **Distribución de fotos del collage configurable**: dispersión libre tipo pila (por defecto), bandas superior/inferior con % de alto independiente, líneas horizontales o verticales (1 a 3), diagonal en ambos sentidos, en X, u óvalo (sobre el borde o relleno).
 - **Vista previa** antes de aplicar.
 - **Rotación automática en segundo plano** vía `systemd --user timer`, no depende de que la app esté abierta.
 - **Icono en la bandeja del sistema**: al cerrar o minimizar la ventana, sigue corriendo en segundo plano (click derecho para rotar ya mismo o salir de verdad).
+- **Autoarranque** configurable como casillero en la ventana principal.
+- **Botón de Ayuda/Acerca de** con la versión, crédito a JBS, licencia y guía rápida de uso.
 
 ## Instalación
 

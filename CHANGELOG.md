@@ -22,6 +22,14 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
   MIT, link al repo) y una sección de Ayuda con el uso básico de la
   app (pestañas por monitor, menú de bandeja, timer en segundo plano).
 
+### Corregido
+
+- El diálogo "Acerca de" recortaba y superponía su propio texto (el
+  `QLabel` con rich text calculaba mal el alto disponible). Se
+  reemplazó por un `QTextBrowser` con scroll interno. De paso, el
+  botón "?" pasó a tener borde de color y negrita para leerse mejor
+  como botón.
+
 ## [0.1.0] - 2026-07-12
 
 Primera versión funcional.

@@ -13,7 +13,7 @@ John's Background Switcher, que no tiene versión Linux).
 | Bridge a Plasma | `src/wallrotate/plasma_bridge.py` | Detecta monitores y aplica wallpaper por pantalla vía `qdbus6`/`org.kde.PlasmaShell.evaluateScript` (método `setWallpaper` nativo no soporta bien parámetros complejos desde CLI, se usa scripting JS de Plasma) |
 | Config | `src/wallrotate/config.py` | Perfiles por pantalla en `~/.config/wallrotate/config.json`, estado de rotación en `state.json` |
 | Motor | `src/wallrotate/engine.py` | Revisa perfiles, aplica el siguiente fondo si venció el intervalo. Se ejecuta vía systemd timer |
-| GUI | `src/wallrotate/app.py` | PySide6, una pestaña por monitor detectado. Tiene icono en bandeja (QSystemTrayIcon): cerrar/minimizar oculta la ventana en vez de salir (`app.setQuitOnLastWindowClosed(False)` + `closeEvent`/`changeEvent` overrides), solo "Salir" del menu del tray cierra de verdad |
+| GUI | `src/wallrotate/app.py` | PySide6, una pestaña por monitor detectado. Tiene icono en bandeja (QSystemTrayIcon): cerrar/minimizar oculta la ventana en vez de salir (`app.setQuitOnLastWindowClosed(False)` + `closeEvent`/`changeEvent` overrides), solo "Salir" del menu del tray cierra de verdad. Boton "?" junto a "Guardar configuracion" abre `AboutDialog` (usa `QTextBrowser`, no `QLabel`, para que el rich text largo no se recorte/superponga) |
 | Desktop entry | `packaging/wallrotate.desktop` | Necesario para que `QApplication.setDesktopFileName` no tire warning del portal y para que el icono/titulo del tray se vea bien (si no, Qt usa el nombre del script como Id/Title) |
 
 ## Cómo correr
