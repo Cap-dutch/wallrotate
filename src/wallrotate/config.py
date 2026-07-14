@@ -24,6 +24,11 @@ class CollageSettings:
     background: str = "blurred"  # "blurred" | "solid"
     photo_fit: str = "contain"  # "contain" = foto completa con fondo blanco | "cover" = recorta y llena el marco
     min_spacing: float = 0.55  # separacion minima entre fotos (0 = pueden superponerse del todo, 1+ = casi sin superposicion)
+    layout: str = "scatter"  # scatter | bands | lines_h | lines_v | diagonal | diagonal_rev | x | oval
+    band_top_fraction: float = 0.5  # solo "bands": alto de la banda superior (0..1)
+    line_count: int = 2  # solo "lines_h"/"lines_v": cantidad de lineas (1-3)
+    path_jitter: float = 0.12  # solo layouts con linea/curva: dispersion alrededor de la misma
+    oval_fill: bool = False  # solo "oval": rellenar el interior en vez de solo el borde
 
 
 @dataclass

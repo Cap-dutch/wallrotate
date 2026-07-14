@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import math
 import random
 from dataclasses import dataclass, field
 from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFilter, ImageEnhance, ImageOps
+
+LAYOUTS = ("scatter", "bands", "lines_h", "lines_v", "diagonal", "diagonal_rev", "x", "oval")
 
 
 @dataclass
@@ -29,6 +32,11 @@ class CollageParams:
     background_blur_radius: int = 40
     background_darken: float = 0.55  # 1.0 = sin oscurecer, 0.0 = negro
     min_spacing: float = 0.55  # distancia minima entre centros de fotos, como fraccion del tamano del marco (0 = sin restriccion, permite superposicion total)
+    layout: str = "scatter"  # ver LAYOUTS: forma en la que se distribuyen las fotos en el canvas
+    band_top_fraction: float = 0.5  # solo "bands": alto de la banda superior, como fraccion del canvas (0..1); el resto es la banda inferior
+    line_count: int = 2  # solo "lines_h"/"lines_v": cantidad de lineas (1-3)
+    path_jitter: float = 0.12  # solo "lines_*"/"diagonal*"/"x"/"oval": dispersion alrededor de la linea/curva, como fraccion del canvas
+    oval_fill: bool = False  # solo "oval": False = fotos sobre el borde de la elipse, True = rellenan el interior
     seed: int | None = None
 
 
@@ -100,28 +108,31 @@ def _frame_content_size(params: CollageParams, canvas_width: int) -> tuple[int, 
 
 
 def _scatter_center(
-    canvas_size: tuple[int, int],
+    region: tuple[float, float, float, float],
     layer_size: tuple[int, int],
     rng: random.Random,
     existing: list[tuple[float, float]],
     min_dist: float,
     attempts: int = 25,
 ) -> tuple[float, float]:
-    """Elige un centro al azar en todo el canvas (estilo pila real), evitando
-    quedar demasiado cerca de fotos ya colocadas -- permite superposicion
-    parcial (da el aspecto de pila) pero no que una foto tape a otra por
-    completo. Si no encuentra un lugar libre tras varios intentos, usa el
-    mejor candidato encontrado."""
-    w, h = canvas_size
+    """Elige un centro al azar dentro de `region` (rx0, rx1, ry0, ry1),
+    evitando quedar demasiado cerca de fotos ya colocadas -- permite
+    superposicion parcial (da el aspecto de pila) pero no que una foto tape
+    a otra por completo. Si no encuentra un lugar libre tras varios
+    intentos, usa el mejor candidato encontrado. Con region = (0, w, 0, h)
+    se comporta igual que la dispersion original en todo el canvas."""
+    rx0, rx1, ry0, ry1 = region
     lw, lh = layer_size
-    margin_x = min(lw * 0.3, w / 2)
-    margin_y = min(lh * 0.3, h / 2)
+    margin_x = min(lw * 0.3, (rx1 - rx0) / 2)
+    margin_y = min(lh * 0.3, (ry1 - ry0) / 2)
+    lo_x, hi_x = rx0 + margin_x, max(rx1 - margin_x, rx0 + margin_x)
+    lo_y, hi_y = ry0 + margin_y, max(ry1 - margin_y, ry0 + margin_y)
 
     best_pos = None
     best_score = -1.0
     for _ in range(attempts):
-        cx = rng.uniform(margin_x, max(w - margin_x, margin_x))
-        cy = rng.uniform(margin_y, max(h - margin_y, margin_y))
+        cx = rng.uniform(lo_x, hi_x)
+        cy = rng.uniform(lo_y, hi_y)
         if not existing:
             return cx, cy
         nearest = min(((cx - ex) ** 2 + (cy - ey) ** 2) ** 0.5 for ex, ey in existing)
@@ -131,6 +142,68 @@ def _scatter_center(
             best_score = nearest
             best_pos = (cx, cy)
     return best_pos
+
+
+def _region_for_index(
+    layout: str,
+    index: int,
+    total: int,
+    canvas_size: tuple[int, int],
+    rng: random.Random,
+    params: CollageParams,
+) -> tuple[float, float, float, float]:
+    """Region (rx0, rx1, ry0, ry1) dentro de la cual puede caer la foto
+    `index` de `total`, segun el layout elegido. Cada foto sigue teniendo
+    dispersion/repulsion dentro de su region via `_scatter_center`."""
+    w, h = canvas_size
+    total = max(total, 1)
+
+    if layout == "bands":
+        top_h = h * params.band_top_fraction
+        if (index / total) < params.band_top_fraction:
+            return (0, w, 0, top_h)
+        return (0, w, top_h, h)
+
+    if layout in ("lines_h", "lines_v"):
+        k = max(1, min(3, params.line_count))
+        li = min(int(index * k / total), k - 1)
+        if layout == "lines_h":
+            line_y = (li + 0.5) / k * h
+            thickness = max(params.path_jitter * h, 1.0)
+            return (0, w, line_y - thickness / 2, line_y + thickness / 2)
+        line_x = (li + 0.5) / k * w
+        thickness = max(params.path_jitter * w, 1.0)
+        return (line_x - thickness / 2, line_x + thickness / 2, 0, h)
+
+    if layout in ("diagonal", "diagonal_rev", "x"):
+        if layout == "x":
+            half = total // 2
+            if index < half:
+                t = (index + 0.5) / max(half, 1)
+                sub = "diagonal"
+            else:
+                t = (index - half + 0.5) / max(total - half, 1)
+                sub = "diagonal_rev"
+        else:
+            t = (index + 0.5) / total
+            sub = layout
+        cx = t * w if sub == "diagonal" else w - t * w
+        cy = t * h
+        thickness = max(params.path_jitter * min(w, h), 1.0)
+        return (cx - thickness, cx + thickness, cy - thickness, cy + thickness)
+
+    if layout == "oval":
+        cx0, cy0 = w / 2, h / 2
+        a, b = w * 0.38, h * 0.38
+        angle = 2 * math.pi * (index + 0.5) / total
+        radius_frac = math.sqrt(rng.random()) if params.oval_fill else 1.0
+        cx = cx0 + radius_frac * a * math.cos(angle)
+        cy = cy0 + radius_frac * b * math.sin(angle)
+        thickness = max(params.path_jitter * min(w, h), 1.0)
+        return (cx - thickness, cx + thickness, cy - thickness, cy + thickness)
+
+    # "scatter" (default): toda la region del canvas, comportamiento original
+    return (0, w, 0, h)
 
 
 def generate_collage(image_paths: list[Path], params: CollageParams) -> Image.Image:
@@ -150,7 +223,8 @@ def generate_collage(image_paths: list[Path], params: CollageParams) -> Image.Im
 
     positioned: list[tuple[Image.Image, int, int]] = []
     centers: list[tuple[float, float]] = []
-    for path in chosen:
+    total = len(chosen)
+    for index, path in enumerate(chosen):
         try:
             framed = _framed_photo(path, content_width, content_height, params)
         except Exception:
@@ -161,7 +235,8 @@ def generate_collage(image_paths: list[Path], params: CollageParams) -> Image.Im
         layer = layer.rotate(angle, expand=True, resample=Image.BICUBIC)
 
         min_dist = max(content_width, content_height) * params.min_spacing
-        cx, cy = _scatter_center(params.canvas_size, layer.size, rng, centers, min_dist)
+        region = _region_for_index(params.layout, index, total, params.canvas_size, rng, params)
+        cx, cy = _scatter_center(region, layer.size, rng, centers, min_dist)
         centers.append((cx, cy))
         x = int(cx - layer.width / 2)
         y = int(cy - layer.height / 2)

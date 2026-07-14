@@ -70,6 +70,11 @@ def _build_collage(profile: ScreenProfile) -> Path | None:
         photo_fit=profile.collage.photo_fit,
         min_spacing=profile.collage.min_spacing,
         background=profile.collage.background,
+        layout=profile.collage.layout,
+        band_top_fraction=profile.collage.band_top_fraction,
+        line_count=profile.collage.line_count,
+        path_jitter=profile.collage.path_jitter,
+        oval_fill=profile.collage.oval_fill,
     )
     img = generate_collage(images, params)
 

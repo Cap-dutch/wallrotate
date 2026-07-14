@@ -11,6 +11,12 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
   `~/.config/autostart/wallrotate.desktop`). Antes había que armar ese
   archivo a mano. En el primer arranque (sin `config.json` previo) la
   app pregunta directamente si se quiere activar.
+- Distribución de fotos configurable en el collage (antes solo existía
+  la dispersión libre tipo pila): bandas (superior/inferior con % de
+  alto independiente), líneas horizontales o verticales (1 a 3),
+  diagonal en ambos sentidos, en X, y óvalo (sobre el borde o
+  rellenando el interior). Nuevo selector "Distribución de fotos" y
+  controles asociados en los parámetros del collage de la GUI.
 
 ## [0.1.0] - 2026-07-12
 

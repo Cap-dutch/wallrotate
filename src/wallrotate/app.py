@@ -109,6 +109,18 @@ FILL_LABELS = {
     "mosaico": "Mosaico",
 }
 
+LAYOUT_LABELS = {
+    "scatter": "Dispersion libre (pila)",
+    "bands": "Bandas (superior/inferior)",
+    "lines_h": "Lineas horizontales",
+    "lines_v": "Lineas verticales",
+    "diagonal": "Diagonal (arriba-izq. a abajo-der.)",
+    "diagonal_rev": "Diagonal (arriba-der. a abajo-izq.)",
+    "x": "En X",
+    "oval": "Ovalo",
+}
+LAYOUT_KEYS = {v: k for k, v in LAYOUT_LABELS.items()}
+
 
 class ScreenTab(QWidget):
     def __init__(self, screen: plasma_bridge.ScreenInfo, profile: ScreenProfile):
@@ -186,6 +198,27 @@ class ScreenTab(QWidget):
         self.background_combo.addItems(["blurred", "solid"])
         cform.addRow("Fondo:", self.background_combo)
 
+        self.layout_combo = QComboBox()
+        self.layout_combo.addItems(LAYOUT_LABELS.values())
+        self.layout_combo.currentTextChanged.connect(self._on_layout_changed)
+        cform.addRow("Distribucion de fotos:", self.layout_combo)
+
+        self.band_top_slider = QSlider(Qt.Horizontal)
+        self.band_top_slider.setRange(10, 90)
+        cform.addRow("Banda superior (%):", self.band_top_slider)
+
+        self.line_count_spin = QSpinBox()
+        self.line_count_spin.setRange(1, 3)
+        cform.addRow("Cantidad de lineas:", self.line_count_spin)
+
+        self.path_jitter_slider = QSlider(Qt.Horizontal)
+        self.path_jitter_slider.setRange(2, 40)
+        cform.addRow("Dispersion alrededor de la linea (%):", self.path_jitter_slider)
+
+        self.oval_fill_check = QCheckBox("Rellenar interior del ovalo (no solo el borde)")
+        cform.addRow("", self.oval_fill_check)
+
+        self.collage_form = cform
         root.addWidget(self.collage_box)
 
         btn_row = QHBoxLayout()
@@ -207,6 +240,19 @@ class ScreenTab(QWidget):
 
     def _on_source_changed(self, text: str) -> None:
         self.collage_box.setVisible(SOURCE_KEYS.get(text) == "collage")
+
+    def _set_row_visible(self, widget: QWidget, visible: bool) -> None:
+        label = self.collage_form.labelForField(widget)
+        if label is not None:
+            label.setVisible(visible)
+        widget.setVisible(visible)
+
+    def _on_layout_changed(self, text: str) -> None:
+        key = LAYOUT_KEYS.get(text, "scatter")
+        self._set_row_visible(self.band_top_slider, key == "bands")
+        self._set_row_visible(self.line_count_spin, key in ("lines_h", "lines_v"))
+        self._set_row_visible(self.path_jitter_slider, key not in ("scatter", "bands"))
+        self._set_row_visible(self.oval_fill_check, key == "oval")
 
     def _browse(self) -> None:
         source_key = SOURCE_KEYS[self.source_combo.currentText()]
@@ -232,6 +278,12 @@ class ScreenTab(QWidget):
         self.fit_combo.setCurrentText(FIT_LABELS.get(p.collage.photo_fit, FIT_LABELS["contain"]))
         self.spacing_slider.setValue(int(p.collage.min_spacing * 100))
         self.background_combo.setCurrentText(p.collage.background)
+        self.layout_combo.setCurrentText(LAYOUT_LABELS.get(p.collage.layout, LAYOUT_LABELS["scatter"]))
+        self.band_top_slider.setValue(int(p.collage.band_top_fraction * 100))
+        self.line_count_spin.setValue(p.collage.line_count)
+        self.path_jitter_slider.setValue(int(p.collage.path_jitter * 100))
+        self.oval_fill_check.setChecked(p.collage.oval_fill)
+        self._on_layout_changed(self.layout_combo.currentText())
         self.collage_box.setVisible(p.source_type == "collage")
 
     def to_profile(self) -> ScreenProfile:
@@ -250,6 +302,11 @@ class ScreenTab(QWidget):
         p.collage.photo_fit = FIT_KEYS[self.fit_combo.currentText()]
         p.collage.min_spacing = self.spacing_slider.value() / 100
         p.collage.background = self.background_combo.currentText()
+        p.collage.layout = LAYOUT_KEYS[self.layout_combo.currentText()]
+        p.collage.band_top_fraction = self.band_top_slider.value() / 100
+        p.collage.line_count = self.line_count_spin.value()
+        p.collage.path_jitter = self.path_jitter_slider.value() / 100
+        p.collage.oval_fill = self.oval_fill_check.isChecked()
         return p
 
     def _preview(self) -> None:
@@ -270,6 +327,11 @@ class ScreenTab(QWidget):
                     photo_fit=profile.collage.photo_fit,
                     min_spacing=profile.collage.min_spacing,
                     background=profile.collage.background,
+                    layout=profile.collage.layout,
+                    band_top_fraction=profile.collage.band_top_fraction,
+                    line_count=profile.collage.line_count,
+                    path_jitter=profile.collage.path_jitter,
+                    oval_fill=profile.collage.oval_fill,
                 )
                 img = generate_collage(images, params)
                 preview_path = Path("/tmp") / f"wallrotate_preview_{self.screen.desktop_index}.png"
