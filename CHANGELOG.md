@@ -2,6 +2,16 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
+## [Sin publicar] - 2026-07-13
+
+### Agregado
+
+- Autoarranque como opción real de la app: casillero "Iniciar
+  automáticamente con el sistema" en la ventana principal (crea/borra
+  `~/.config/autostart/wallrotate.desktop`). Antes había que armar ese
+  archivo a mano. En el primer arranque (sin `config.json` previo) la
+  app pregunta directamente si se quiere activar.
+
 ## [0.1.0] - 2026-07-12
 
 Primera versión funcional.
