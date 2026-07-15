@@ -29,6 +29,15 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
   reemplazó por un `QTextBrowser` con scroll interno. De paso, el
   botón "?" pasó a tener borde de color y negrita para leerse mejor
   como botón.
+- El autoarranque no levantaba la GUI (ícono de bandeja ausente tras
+  reiniciar la sesión, sin ningún error visible salvo en el log del
+  sistema): `~/.config/autostart/wallrotate.desktop` usaba
+  `Exec=wallrotate`, y `systemd-xdg-autostart-generator` evalúa ese
+  archivo antes de que el manager de systemd de usuario importe el
+  `PATH` de la sesión gráfica (que es donde vive `~/.local/bin`). El
+  archivo ahora se genera con la ruta absoluta al binario del venv
+  (`Exec=/ruta/al/proyecto/.venv/bin/wallrotate`), sin depender del
+  `PATH` en ese momento del arranque.
 
 ## [0.1.0] - 2026-07-12
 

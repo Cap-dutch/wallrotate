@@ -41,11 +41,20 @@ from .engine import apply_profile, current_image_path, go_next, go_previous, run
 from .config import load_state, save_state
 
 AUTOSTART_PATH = Path.home() / ".config" / "autostart" / "wallrotate.desktop"
-_AUTOSTART_CONTENT = """[Desktop Entry]
+
+
+def _autostart_content() -> str:
+    # Exec= con ruta absoluta al binario del venv: systemd-xdg-autostart-generator
+    # evalua este archivo muy temprano en el arranque de la sesion, antes de que
+    # el PATH del manager de systemd de usuario incluya ~/.local/bin (se importa
+    # despues) -- con solo "wallrotate" el generador tira "Exec binary 'wallrotate'
+    # does not exist" y la app nunca arranca.
+    wallrotate_bin = Path(sys.executable).parent / "wallrotate"
+    return f"""[Desktop Entry]
 Type=Application
 Name=WallRotate
 Comment=Rotador de fondos de pantalla con collage, por monitor
-Exec=wallrotate
+Exec={wallrotate_bin}
 Icon=preferences-desktop-wallpaper
 Terminal=false
 Categories=Utility;DesktopSettings;
@@ -60,7 +69,7 @@ def is_autostart_enabled() -> bool:
 def set_autostart(enabled: bool) -> None:
     if enabled:
         AUTOSTART_PATH.parent.mkdir(parents=True, exist_ok=True)
-        AUTOSTART_PATH.write_text(_AUTOSTART_CONTENT)
+        AUTOSTART_PATH.write_text(_autostart_content())
     else:
         AUTOSTART_PATH.unlink(missing_ok=True)
 
