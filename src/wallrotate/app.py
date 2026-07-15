@@ -49,12 +49,14 @@ def _autostart_content() -> str:
     # el PATH del manager de systemd de usuario incluya ~/.local/bin (se importa
     # despues) -- con solo "wallrotate" el generador tira "Exec binary 'wallrotate'
     # does not exist" y la app nunca arranca.
+    # --minimized: en autoarranque no queremos que la ventana principal se abra
+    # y ocupe la barra de tareas en cada inicio de sesion, solo el icono de bandeja.
     wallrotate_bin = Path(sys.executable).parent / "wallrotate"
     return f"""[Desktop Entry]
 Type=Application
 Name=WallRotate
 Comment=Rotador de fondos de pantalla con collage, por monitor
-Exec={wallrotate_bin}
+Exec={wallrotate_bin} --minimized
 Icon=preferences-desktop-wallpaper
 Terminal=false
 Categories=Utility;DesktopSettings;
@@ -637,7 +639,8 @@ def main() -> None:
     app.setDesktopFileName("wallrotate")
     app.setQuitOnLastWindowClosed(False)
     window = MainWindow()
-    window.show()
+    if "--minimized" not in sys.argv:
+        window.show()
     sys.exit(app.exec())
 
 

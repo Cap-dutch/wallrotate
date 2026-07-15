@@ -38,6 +38,11 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
   archivo ahora se genera con la ruta absoluta al binario del venv
   (`Exec=/ruta/al/proyecto/.venv/bin/wallrotate`), sin depender del
   `PATH` en ese momento del arranque.
+- El autoarranque abría la ventana principal y quedaba como una app
+  más en la barra de tareas en cada inicio de sesión, en vez de
+  arrancar solo con el ícono de bandeja (comportamiento esperado). Se
+  agregó el flag `--minimized` (usado en el `Exec=` del autoarranque)
+  que evita el `window.show()` inicial.
 
 ## [0.1.0] - 2026-07-12
 
