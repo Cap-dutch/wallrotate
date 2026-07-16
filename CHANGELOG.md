@@ -21,6 +21,12 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
   WallRotate" (versión, crédito a John's Background Switcher, licencia
   MIT, link al repo) y una sección de Ayuda con el uso básico de la
   app (pestañas por monitor, menú de bandeja, timer en segundo plano).
+- "Pausar todo" en el menú de bandeja, junto a "Rotar ahora (todas)":
+  pausa o reanuda la rotación de todas las pantallas de una vez, en
+  vez de tener que entrar pantalla por pantalla. Si el estado está
+  mezclado (alguna pausada y otra no), pausa todas; si ya están todas
+  pausadas, las reanuda. Se mantiene sincronizado con los checkboxes
+  "Pausar rotación" de cada pantalla.
 
 ### Corregido
 

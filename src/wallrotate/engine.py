@@ -220,6 +220,20 @@ def toggle_pause(desktop_index: int) -> bool:
     return profile.paused
 
 
+def toggle_pause_all() -> bool:
+    """Pausa/reanuda la rotacion automatica de todas las pantallas a la vez.
+    Si ya estan todas pausadas, las reanuda; en cualquier otro caso, pausa
+    todas. Devuelve el nuevo estado (True = todas pausadas)."""
+    config = load_config()
+    if not config.profiles:
+        return False
+    new_state = not all(profile.paused for profile in config.profiles)
+    for profile in config.profiles:
+        profile.paused = new_state
+    save_config(config)
+    return new_state
+
+
 def current_image_path(desktop_index: int) -> Path | None:
     state = load_state()
     history = _get_history(state, desktop_index)

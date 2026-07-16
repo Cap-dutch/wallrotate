@@ -37,7 +37,7 @@ from PySide6.QtWidgets import (
 from . import plasma_bridge
 from .collage import CollageParams, generate_collage
 from .config import CACHE_DIR, CONFIG_PATH, Config, ScreenProfile, load_config, save_config
-from .engine import apply_profile, current_image_path, go_next, go_previous, run_once, toggle_pause
+from .engine import apply_profile, current_image_path, go_next, go_previous, run_once, toggle_pause, toggle_pause_all
 from .config import load_state, save_state
 
 AUTOSTART_PATH = Path.home() / ".config" / "autostart" / "wallrotate.desktop"
@@ -514,6 +514,14 @@ class MainWindow(QMainWindow):
         show_action.triggered.connect(self._show_from_tray)
         rotate_action = menu.addAction("Rotar ahora (todas)")
         rotate_action.triggered.connect(self._rotate_now_all)
+
+        self._pause_all_action = menu.addAction("Pausar todo")
+        self._pause_all_action.setCheckable(True)
+        self._pause_all_action.setChecked(
+            bool(self.config.profiles) and all(p.paused for p in self.config.profiles)
+        )
+        self._pause_all_action.triggered.connect(self._toggle_pause_all)
+
         menu.addSeparator()
 
         for screen in self.screens:
@@ -570,8 +578,19 @@ class MainWindow(QMainWindow):
         action = self._pause_actions.get(desktop_index)
         if action is not None:
             action.setChecked(paused)
+        self._pause_all_action.setChecked(
+            bool(self._pause_actions) and all(a.isChecked() for a in self._pause_actions.values())
+        )
         estado = "pausada" if paused else "reanudada"
         self.tray.showMessage("WallRotate", f"Rotacion {estado}.", QSystemTrayIcon.MessageIcon.Information, 2000)
+
+    def _toggle_pause_all(self) -> None:
+        paused = toggle_pause_all()
+        self._pause_all_action.setChecked(paused)
+        for action in self._pause_actions.values():
+            action.setChecked(paused)
+        estado = "pausada" if paused else "reanudada"
+        self.tray.showMessage("WallRotate", f"Rotacion {estado} en todas las pantallas.", QSystemTrayIcon.MessageIcon.Information, 2000)
 
     def _view_current(self, desktop_index: int) -> None:
         path = current_image_path(desktop_index)
