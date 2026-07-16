@@ -40,8 +40,9 @@ armando el mío.
 - **Distribución de fotos del collage configurable**: dispersión libre tipo pila (por defecto), bandas superior/inferior con % de alto independiente, líneas horizontales o verticales (1 a 3), diagonal en ambos sentidos, en X, u óvalo (sobre el borde o relleno).
 - **Vista previa** antes de aplicar.
 - **Rotación automática en segundo plano** vía `systemd --user timer`, no depende de que la app esté abierta.
-- **Icono en la bandeja del sistema**: al cerrar o minimizar la ventana, sigue corriendo en segundo plano (click derecho para rotar ya mismo o salir de verdad).
+- **Icono en la bandeja del sistema**: al cerrar o minimizar la ventana, sigue corriendo en segundo plano (click derecho para rotar ya mismo o salir de verdad, y "Pausar todo" para las N pantallas de una vez).
 - **Autoarranque** configurable como casillero en la ventana principal.
+- **Pausa automática si hay una app en pantalla completa** (juegos, películas): detecta la ventana activa vía KWin, funciona en X11 y Wayland.
 - **Botón de Ayuda/Acerca de** con la versión, crédito a JBS, licencia y guía rápida de uso.
 
 ## Instalación

@@ -146,6 +146,12 @@ def run_once(force: bool = False) -> None:
     state = load_state()
     now = time.time()
 
+    if config.pause_on_fullscreen and not force:
+        from .fullscreen import is_fullscreen_active
+        if is_fullscreen_active():
+            log.info("Rotacion pausada: hay una ventana en pantalla completa")
+            return
+
     for profile in config.profiles:
         if not profile.enabled or not profile.source_path or profile.paused:
             continue

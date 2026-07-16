@@ -417,6 +417,10 @@ class AboutDialog(QDialog):
             "aunque cierres esta ventana (cerrar solo la oculta).</li>"
             "<li>\"Vista previa\" genera la imagen sin aplicarla; \"Aplicar ahora\" "
             "la pone de fondo en esa pantalla.</li>"
+            "<li>\"Pausar rotación automática si hay una app en pantalla completa\" "
+            "detecta juegos o reproductores en pantalla completa vía KWin y salta "
+            "la rotación de ese ciclo (no afecta a \"Rotar ahora\" ni al menú de "
+            "bandeja, que siempre funcionan).</li>"
             "</ul>"
         )
         layout.addWidget(browser)
@@ -456,6 +460,12 @@ class MainWindow(QMainWindow):
         self.autostart_check.setChecked(is_autostart_enabled())
         self.autostart_check.toggled.connect(self._on_autostart_toggled)
         layout.addWidget(self.autostart_check)
+
+        self.fullscreen_pause_check = QCheckBox(
+            "Pausar rotacion automatica si hay una app en pantalla completa (juegos, peliculas)"
+        )
+        self.fullscreen_pause_check.setChecked(self.config.pause_on_fullscreen)
+        layout.addWidget(self.fullscreen_pause_check)
 
         save_row = QHBoxLayout()
         save_btn = QPushButton("Guardar configuracion")
@@ -646,7 +656,7 @@ class MainWindow(QMainWindow):
 
     def _save(self) -> None:
         profiles = [tab.to_profile() for tab in self.screen_tabs]
-        self.config = Config(profiles=profiles)
+        self.config = Config(profiles=profiles, pause_on_fullscreen=self.fullscreen_pause_check.isChecked())
         save_config(self.config)
         QMessageBox.information(self, "Guardado", "Configuracion guardada. El timer de systemd aplicara los cambios segun el intervalo de cada pantalla.")
 

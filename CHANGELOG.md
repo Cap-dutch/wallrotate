@@ -27,6 +27,14 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
   mezclado (alguna pausada y otra no), pausa todas; si ya están todas
   pausadas, las reanuda. Se mantiene sincronizado con los checkboxes
   "Pausar rotación" de cada pantalla.
+- Casillero "Pausar rotación automática si hay una app en pantalla
+  completa (juegos, películas)" en la ventana principal. Detecta la
+  ventana activa a pantalla completa consultando a KWin (vía un script
+  cargado dinámicamente por D-Bus, `src/wallrotate/fullscreen.py`),
+  funciona tanto en X11 como en Wayland. Solo afecta al chequeo
+  periódico automático del timer — "Rotar ahora" y el resto del menú
+  de bandeja siguen funcionando igual mientras hay algo en pantalla
+  completa.
 
 ### Corregido
 

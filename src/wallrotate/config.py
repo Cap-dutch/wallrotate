@@ -54,6 +54,7 @@ class ScreenProfile:
 @dataclass
 class Config:
     profiles: list[ScreenProfile] = field(default_factory=list)
+    pause_on_fullscreen: bool = False  # pausar la rotacion automatica mientras haya una app en pantalla completa (juegos, peliculas)
 
     def profile_for(self, desktop_index: int) -> ScreenProfile | None:
         return next((p for p in self.profiles if p.desktop_index == desktop_index), None)
@@ -64,12 +65,15 @@ def load_config() -> Config:
         return Config()
     data = json.loads(CONFIG_PATH.read_text())
     profiles = [ScreenProfile.from_dict(dict(p)) for p in data.get("profiles", [])]
-    return Config(profiles=profiles)
+    return Config(profiles=profiles, pause_on_fullscreen=data.get("pause_on_fullscreen", False))
 
 
 def save_config(config: Config) -> None:
     CONFIG_DIR.mkdir(parents=True, exist_ok=True)
-    data = {"profiles": [asdict(p) for p in config.profiles]}
+    data = {
+        "profiles": [asdict(p) for p in config.profiles],
+        "pause_on_fullscreen": config.pause_on_fullscreen,
+    }
     CONFIG_PATH.write_text(json.dumps(data, indent=2, ensure_ascii=False))
 
 
