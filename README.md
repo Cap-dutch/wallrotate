@@ -43,6 +43,7 @@ armando el mío.
 - **Icono en la bandeja del sistema**: al cerrar o minimizar la ventana, sigue corriendo en segundo plano (click derecho para rotar ya mismo o salir de verdad, y "Pausar todo" para las N pantallas de una vez).
 - **Autoarranque** configurable como casillero en la ventana principal.
 - **Pausa automática si hay una app en pantalla completa** (juegos, películas): detecta la ventana activa vía KWin, funciona en X11 y Wayland.
+- **Notificación de escritorio con miniatura** del fondo recién aplicado, en cada rotación (automática o manual).
 - **Botón de Ayuda/Acerca de** con la versión, crédito a JBS, licencia y guía rápida de uso.
 
 ## Instalación

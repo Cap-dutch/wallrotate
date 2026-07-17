@@ -35,6 +35,17 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
   periódico automático del timer — "Rotar ahora" y el resto del menú
   de bandeja siguen funcionando igual mientras hay algo en pantalla
   completa.
+- Notificación de escritorio con miniatura del collage/imagen recién
+  aplicada, en cada rotación (automática o manual — "Rotar ahora",
+  "Siguiente/Anterior fondo"). Un solo punto de disparo (`_apply_path`
+  en `engine.py`, vía `notify-send`) cubre ambos casos, incluida la
+  rotación automática del timer que corre sin GUI. El daemon de
+  notificaciones de Plasma ignora tanto el hint `image-path` como los
+  atributos `width`/`height` del tag `<img>` en el cuerpo del mensaje
+  (siempre renderiza a tamaño original) — la solución fue generar una
+  miniatura real de 200×200 con Pillow y embeberla en el cuerpo vía
+  `<img src="file://...">`, ya que el único control real del tamaño es
+  pre-escalar el archivo antes de mandarlo.
 
 ### Corregido
 

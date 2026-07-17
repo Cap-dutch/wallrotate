@@ -10,8 +10,11 @@ from __future__ import annotations
 
 import logging
 import random
+import subprocess
 import time
 from pathlib import Path
+
+from PIL import Image
 
 from . import plasma_bridge
 from .collage import CollageParams, generate_collage
@@ -126,10 +129,46 @@ def _push_history(state: dict, desktop_index: int, path: Path) -> None:
 
 # --- aplicar -------------------------------------------------------------
 
+def _make_notification_thumbnail(profile: ScreenProfile, path: Path) -> Path | None:
+    """Miniatura chica para incrustar en el cuerpo de la notificacion con
+    <img>. El daemon de notificaciones de Plasma ignora los atributos
+    width/height del tag <img> y los hints image-path/icon (los renderiza
+    en el slot chico del icono de la app) -- el unico control real del
+    tamano visual es pre-escalar el archivo antes de mandarlo."""
+    try:
+        with Image.open(path) as im:
+            im = im.convert("RGB")
+            im.thumbnail((200, 200))
+            thumb_path = CACHE_DIR / f"notif_thumb_{profile.desktop_index}.png"
+            im.save(thumb_path)
+        return thumb_path
+    except Exception:
+        log.warning("No se pudo generar la miniatura de la notificacion", exc_info=True)
+        return None
+
+
+def _notify_new_wallpaper(profile: ScreenProfile, path: Path) -> None:
+    """Notificacion de escritorio con miniatura del fondo recien aplicado.
+    Via notify-send (no via QSystemTrayIcon) porque este codigo corre tanto
+    desde la GUI como desde wallrotate-engine, un proceso separado sin tray
+    ni ventana -- notify-send le habla directo a notificaciones de KDE."""
+    screen = profile.screen_name or f"pantalla {profile.desktop_index}"
+    thumb_path = _make_notification_thumbnail(profile, path)
+    body = f'<img src="file://{thumb_path}"/>Nuevo fondo en {screen}' if thumb_path else f"Nuevo fondo en {screen}"
+    try:
+        subprocess.run(
+            ["notify-send", "--app-name=WallRotate", "--expire-time=5000", "WallRotate", body],
+            capture_output=True, timeout=3,
+        )
+    except Exception:
+        log.warning("No se pudo mostrar la notificacion de escritorio", exc_info=True)
+
+
 def _apply_path(profile: ScreenProfile, path: Path, state: dict) -> None:
     plasma_bridge.set_wallpaper(profile.desktop_index, path, fill_mode=profile.fill_mode)
     state[f"last_applied_{profile.desktop_index}"] = time.time()
     log.info("Pantalla %s -> %s", profile.desktop_index, path)
+    _notify_new_wallpaper(profile, path)
 
 
 def apply_profile(profile: ScreenProfile, state: dict) -> None:

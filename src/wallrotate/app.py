@@ -574,9 +574,8 @@ class MainWindow(QMainWindow):
         self.tray.show()
 
     def _next_screen(self, desktop_index: int) -> None:
-        if go_next(desktop_index):
-            self.tray.showMessage("WallRotate", "Siguiente fondo aplicado.", QSystemTrayIcon.MessageIcon.Information, 2000)
-        else:
+        # el aviso de exito (con miniatura) lo dispara engine._apply_path via notify-send
+        if not go_next(desktop_index):
             self.tray.showMessage("WallRotate", "No se pudo avanzar (revisa la carpeta configurada).", QSystemTrayIcon.MessageIcon.Warning, 3000)
 
     def _previous_screen(self, desktop_index: int) -> None:
@@ -632,8 +631,8 @@ class MainWindow(QMainWindow):
         self.activateWindow()
 
     def _rotate_now_all(self) -> None:
+        # cada pantalla dispara su propio aviso con miniatura via engine._apply_path
         run_once(force=True)
-        self.tray.showMessage("WallRotate", "Fondos rotados en todas las pantallas activas.", QSystemTrayIcon.MessageIcon.Information, 3000)
 
     def _quit(self) -> None:
         self._really_quit = True
