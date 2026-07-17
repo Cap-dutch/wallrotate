@@ -45,7 +45,9 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
   (siempre renderiza a tamaño original) — la solución fue generar una
   miniatura real de 200×200 con Pillow y embeberla en el cuerpo vía
   `<img src="file://...">`, ya que el único control real del tamaño es
-  pre-escalar el archivo antes de mandarlo.
+  pre-escalar el archivo antes de mandarlo. El texto va en su propia
+  línea con `<br/>` después de la imagen (el centrado no es posible:
+  el daemon tampoco respeta `<center>`/`align="center"`).
 
 ### Corregido
 

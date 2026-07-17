@@ -154,7 +154,7 @@ def _notify_new_wallpaper(profile: ScreenProfile, path: Path) -> None:
     ni ventana -- notify-send le habla directo a notificaciones de KDE."""
     screen = profile.screen_name or f"pantalla {profile.desktop_index}"
     thumb_path = _make_notification_thumbnail(profile, path)
-    body = f'<img src="file://{thumb_path}"/>Nuevo fondo en {screen}' if thumb_path else f"Nuevo fondo en {screen}"
+    body = f'<img src="file://{thumb_path}"/><br/>Nuevo fondo en {screen}' if thumb_path else f"Nuevo fondo en {screen}"
     try:
         subprocess.run(
             ["notify-send", "--app-name=WallRotate", "--expire-time=5000", "WallRotate", body],
