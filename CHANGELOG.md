@@ -51,6 +51,16 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ### Corregido
 
+- La detección de "pantalla completa" (para pausar la rotación) tenía
+  dos problemas: solo miraba la ventana activa (con foco), así que en
+  un setup multi-monitor (ej. un "smart TV" en HDMI-A-1) se le escapaba
+  si el foco estaba en otra pantalla; y algunos reproductores de video
+  con DRM (ej. HBO Max en el navegador) no piden pantalla completa
+  real al compositor, solo maximizan la ventana y ocultan su propia
+  interfaz, así que `fullScreen` quedaba en `false` aunque se viera a
+  pantalla completa. `check_fullscreen.js` ahora revisa todas las
+  ventanas de todas las pantallas, y trata una ventana maximizada que
+  cubre exactamente su pantalla como equivalente a pantalla completa.
 - El diálogo "Acerca de" recortaba y superponía su propio texto (el
   `QLabel` con rich text calculaba mal el alto disponible). Se
   reemplazó por un `QTextBrowser` con scroll interno. De paso, el
