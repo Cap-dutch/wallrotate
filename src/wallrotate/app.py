@@ -184,6 +184,11 @@ class _PhotoItem(QGraphicsPixmapItem):
         self.setTransformOriginPoint(pixmap.width() / 2, pixmap.height() / 2)
         self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsSelectable, True)
         self.setAcceptHoverEvents(True)
+        # sin esto, Qt solo detecta clicks sobre pixeles opacos del pixmap
+        # (ShapeMode.MaskShape, el default) -- el margen de la sombra difusa
+        # es transparente y ahi cae el handle de rotar/escalar, asi que sin
+        # BoundingRectShape el click en la esquina "atraviesa" la foto.
+        self.setShapeMode(QGraphicsPixmapItem.ShapeMode.BoundingRectShape)
         self._mode: str | None = None
         self._press_scene = None
         self._start_item_pos = None

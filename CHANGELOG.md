@@ -6,6 +6,19 @@ propósito o la forma de usar la app) suben el número mayor, cambios
 menores (features nuevas) suben el número del medio, arreglos suben el
 último.
 
+## [1.0.1] - 2026-07-25
+
+### Corregido
+
+- En el editor de collage, el punto de la esquina (rotar + escalar) no
+  respondía al arrastre, aunque mover el cuerpo de la foto sí
+  funcionaba. Causa: `QGraphicsPixmapItem` detecta clicks por defecto
+  solo sobre los píxeles opacos del pixmap (`ShapeMode.MaskShape`), y
+  el margen transparente de la sombra difusa (`~56px`) cae justo donde
+  se dibuja el punto de 26px — el click "atravesaba" la foto en vez de
+  agarrarla. Se fuerza `ShapeMode.BoundingRectShape` para que todo el
+  rectángulo del ítem (incluido el margen de sombra) reciba clicks.
+
 ## [1.0.0] - 2026-07-25
 
 ### Agregado
@@ -150,5 +163,6 @@ Primera versión funcional.
 - README con instalación, uso, arquitectura, capturas de ejemplo.
 - Historia del proyecto y créditos a John's Background Switcher.
 
+[1.0.1]: https://github.com/Cap-dutch/wallrotate/releases/tag/v1.0.1
 [1.0.0]: https://github.com/Cap-dutch/wallrotate/releases/tag/v1.0.0
 [0.1.0]: https://github.com/Cap-dutch/wallrotate/releases/tag/v0.1.0
