@@ -6,6 +6,22 @@ propósito o la forma de usar la app) suben el número mayor, cambios
 menores (features nuevas) suben el número del medio, arreglos suben el
 último.
 
+## [1.0.2] - 2026-07-25
+
+### Corregido
+
+- El collage editado no se veía igual al aplicarlo al escritorio: las
+  rotaciones quedaban invertidas (ej. una foto girada visualmente hacia
+  la derecha en el editor terminaba girada hacia la izquierda en el
+  fondo aplicado). Causa: Qt rota en sentido horario para ángulos
+  positivos, Pillow (que dibuja la imagen final) rota en sentido
+  antihorario — el ángulo se guardaba tal cual salía de Qt sin
+  convertir. Se invierte el signo al mostrar el ángulo en el editor y
+  de nuevo al leerlo de vuelta, verificado con un round-trip (abrir y
+  cerrar sin editar debe dar los mismos ángulos) y una prueba de
+  dirección (rotar +40° en el editor debe guardarse como -40° en la
+  convención de Pillow).
+
 ## [1.0.1] - 2026-07-25
 
 ### Corregido
@@ -163,6 +179,7 @@ Primera versión funcional.
 - README con instalación, uso, arquitectura, capturas de ejemplo.
 - Historia del proyecto y créditos a John's Background Switcher.
 
+[1.0.2]: https://github.com/Cap-dutch/wallrotate/releases/tag/v1.0.2
 [1.0.1]: https://github.com/Cap-dutch/wallrotate/releases/tag/v1.0.1
 [1.0.0]: https://github.com/Cap-dutch/wallrotate/releases/tag/v1.0.0
 [0.1.0]: https://github.com/Cap-dutch/wallrotate/releases/tag/v0.1.0

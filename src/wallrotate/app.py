@@ -286,7 +286,11 @@ class CollageEditorDialog(QDialog):
             item = _PhotoItem(_pil_to_qpixmap(base_img), placement)
             pw, ph = item.pixmap().width(), item.pixmap().height()
             item.setPos(placement.cx - pw / 2, placement.cy - ph / 2)
-            item.setRotation(placement.angle)
+            # Qt rota en sentido horario para angulos positivos; Pillow (el que
+            # dibuja el resultado final) rota en sentido antihorario -- se
+            # invierte el signo para que se vea igual en el editor y en la
+            # imagen aplicada.
+            item.setRotation(-placement.angle)
             item.setScale(placement.scale)
             item._raise_to_front()
             self.scene.addItem(item)
@@ -332,7 +336,7 @@ class CollageEditorDialog(QDialog):
                     path=item.placement.path,
                     cx=center.x(),
                     cy=center.y(),
-                    angle=item.rotation(),
+                    angle=-item.rotation(),  # de vuelta a la convencion de Pillow (ver setRotation en __init__)
                     scale=item.scale(),
                 )
             )
