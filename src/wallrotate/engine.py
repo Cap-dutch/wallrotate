@@ -180,6 +180,19 @@ def apply_profile(profile: ScreenProfile, state: dict) -> None:
     _push_history(state, profile.desktop_index, image_path)
 
 
+def apply_prerendered(profile: ScreenProfile, image: Image.Image, state: dict) -> Path:
+    """Guarda y aplica una imagen ya generada (ej. un collage editado a mano
+    en el editor de la GUI), sin generar una nueva al azar. Reusa el mismo
+    camino que apply_profile (aplicar + notificar + historial), solo que la
+    imagen ya viene resuelta de antemano."""
+    CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    out_path = CACHE_DIR / f"collage_{profile.desktop_index}_{int(time.time())}.png"
+    image.save(out_path)
+    _apply_path(profile, out_path, state)
+    _push_history(state, profile.desktop_index, out_path)
+    return out_path
+
+
 def run_once(force: bool = False) -> None:
     config = load_config()
     state = load_state()

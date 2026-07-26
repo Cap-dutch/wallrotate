@@ -1,6 +1,6 @@
 [project]
 name = "wallrotate"
-version = "0.1.0"
+version = "1.0.0"
 description = "Rotador de fondos de pantalla con collages, por monitor, para KDE Plasma"
 readme = "README.md"
 license = "MIT"

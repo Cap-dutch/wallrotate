@@ -38,6 +38,7 @@ armando el mío.
 - **Modo de ajuste de imagen**: rellenar, ajustar, estirar, centrado, mosaico.
 - **Parámetros de collage ajustables**: cantidad de fotos, ángulo máximo de rotación, sombra on/off, marco on/off, tamaño relativo de cada foto, tipo de fondo (difuminado o color sólido).
 - **Distribución de fotos del collage configurable**: dispersión libre tipo pila (por defecto), bandas superior/inferior con % de alto independiente, líneas horizontales o verticales (1 a 3), diagonal en ambos sentidos, en X, u óvalo (sobre el borde o relleno).
+- **Editor de collage interactivo**: después de la vista previa, "Editar collage..." abre un lienzo donde podés arrastrar cada foto para moverla, o agarrar el punto de la esquina para rotarla e inclinarla mientras la agrandás o achicás — útil para que una foto no tape del todo a otra. No cambia qué fotos se usan, solo su posición para esa aplicación puntual.
 - **Vista previa** antes de aplicar.
 - **Rotación automática en segundo plano** vía `systemd --user timer`, no depende de que la app esté abierta.
 - **Icono en la bandeja del sistema**: al cerrar o minimizar la ventana, sigue corriendo en segundo plano (click derecho para rotar ya mismo o salir de verdad, y "Pausar todo" para las N pantallas de una vez).

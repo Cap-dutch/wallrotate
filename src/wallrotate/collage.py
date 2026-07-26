@@ -40,12 +40,37 @@ class CollageParams:
     seed: int | None = None
 
 
-def _make_background(canvas_size: tuple[int, int], image_paths: list[Path], params: CollageParams) -> Image.Image:
+@dataclass
+class PhotoPlacement:
+    """Posicion final de una foto en el collage: centro, rotacion y escala
+    (multiplicador sobre el tamano base de foto de CollageParams). Es la
+    unidad editable -- el editor interactivo de la GUI ajusta estos valores
+    y `render_from_layout` los usa para dibujar el resultado final."""
+
+    path: Path
+    cx: float
+    cy: float
+    angle: float = 0.0
+    scale: float = 1.0
+
+
+@dataclass
+class CollageLayout:
+    """Layout completo y reproducible de un collage: que fotos, donde, y
+    cual se uso de fondo. `auto_layout` lo genera al azar; el editor
+    interactivo de la GUI edita `placements` y pasa el mismo layout de
+    vuelta a `render_from_layout` -- el fondo no cambia solo entre la
+    vista previa y el resultado final editado."""
+
+    placements: list[PhotoPlacement]
+    background_path: Path | None = None
+
+
+def _make_background(canvas_size: tuple[int, int], bg_path: Path | None, params: CollageParams) -> Image.Image:
     w, h = canvas_size
-    if params.background == "solid" or not image_paths:
+    if params.background == "solid" or bg_path is None:
         return Image.new("RGB", (w, h), params.background_color)
 
-    bg_path = random.choice(image_paths)
     with Image.open(bg_path) as im:
         im = ImageOps.exif_transpose(im.convert("RGB"))
         bg = ImageOps.fit(im, (w, h), method=Image.LANCZOS)
@@ -105,6 +130,31 @@ def _frame_content_size(params: CollageParams, canvas_width: int) -> tuple[int, 
     content_width = max(int(canvas_width * params.photo_scale), 40)
     content_height = int(content_width * params.frame_aspect)
     return content_width, content_height
+
+
+def _layer_size_before_rotation(content_size: tuple[int, int], params: CollageParams) -> tuple[int, int]:
+    """Tamano del marco+sombra (sin rotar todavia), calculado analiticamente
+    a partir del tamano del area de foto, sin necesidad de renderizar nada."""
+    cw, ch = content_size
+    if params.border:
+        bw = params.border_width
+        bottom = bw + params.bottom_border_extra
+        fw, fh = cw + bw * 2, ch + bw + bottom
+    else:
+        fw, fh = cw, ch
+    if params.shadow:
+        pad = params.shadow_blur * 3 + max(params.shadow_offset)
+        fw, fh = fw + pad * 2, fh + pad * 2
+    return fw, fh
+
+
+def _rotated_bbox_size(w: int, h: int, angle_deg: float) -> tuple[int, int]:
+    """Tamano del rectangulo que contiene a un WxH rotado angle_deg grados,
+    igual al que produce Image.rotate(expand=True) pero sin renderizar."""
+    rad = math.radians(angle_deg)
+    new_w = abs(w * math.cos(rad)) + abs(h * math.sin(rad))
+    new_h = abs(w * math.sin(rad)) + abs(h * math.cos(rad))
+    return max(int(round(new_w)), 1), max(int(round(new_h)), 1)
 
 
 def _scatter_center(
@@ -206,48 +256,105 @@ def _region_for_index(
     return (0, w, 0, h)
 
 
-def generate_collage(image_paths: list[Path], params: CollageParams) -> Image.Image:
-    """Genera una imagen tipo "pila de fotos" a partir de una lista de rutas de imagenes."""
+def _render_placement(
+    placement: PhotoPlacement, base_content_size: tuple[int, int], params: CollageParams
+) -> tuple[Image.Image, int, int]:
+    """Renderiza una foto (marco + sombra + rotacion) segun su PhotoPlacement.
+    Devuelve la capa ya rotada y la posicion (x, y) de su esquina superior
+    izquierda en el canvas."""
+    cw = max(int(base_content_size[0] * placement.scale), 20)
+    ch = max(int(base_content_size[1] * placement.scale), 20)
+    framed = _framed_photo(placement.path, cw, ch, params)
+    layer = _with_shadow(framed, params)
+    layer = layer.rotate(placement.angle, expand=True, resample=Image.BICUBIC)
+    x = int(placement.cx - layer.width / 2)
+    y = int(placement.cy - layer.height / 2)
+    return layer, x, y
+
+
+def render_photo_base(path: Path, content_size: tuple[int, int], scale: float, params: CollageParams) -> Image.Image:
+    """Renderiza una foto con marco y sombra, SIN rotar (angulo=0) -- pensado
+    para editores interactivos (Qt) que aplican rotacion/escala ellos mismos
+    via transformaciones del canvas, en vez de rotar el raster con Pillow en
+    cada frame de arrastre."""
+    cw = max(int(content_size[0] * scale), 20)
+    ch = max(int(content_size[1] * scale), 20)
+    framed = _framed_photo(path, cw, ch, params)
+    return _with_shadow(framed, params)
+
+
+def render_background(background_path: Path | None, canvas_size: tuple[int, int], params: CollageParams) -> Image.Image:
+    """Wrapper publico sobre el fondo difuminado/solido, para editores
+    interactivos que necesitan mostrarlo como base del lienzo."""
+    return _make_background(canvas_size, background_path, params)
+
+
+def base_content_size(params: CollageParams) -> tuple[int, int]:
+    """Tamano base (escala 1.0) del area de foto dentro del marco, segun el
+    ancho del canvas configurado."""
+    return _frame_content_size(params, params.canvas_size[0])
+
+
+def auto_layout(image_paths: list[Path], params: CollageParams) -> CollageLayout:
+    """Elige fotos y calcula su posicion/rotacion al azar (sin renderizar
+    nada todavia), respetando el layout elegido (bandas, lineas, etc.) y la
+    separacion minima entre fotos. El orden de la lista es el orden de
+    dibujado (z-order): las ultimas quedan arriba de las primeras. Tambien
+    elige (una sola vez) la foto de fondo difuminado."""
     if not image_paths:
         raise ValueError("Se necesita al menos una imagen para armar el collage")
 
     rng = random.Random(params.seed)
-    canvas = _make_background(params.canvas_size, image_paths, params).convert("RGBA")
+    background_path = rng.choice(image_paths)
 
     chosen = image_paths[:]
     rng.shuffle(chosen)
     chosen = chosen[: params.max_photos]
 
     canvas_w, canvas_h = params.canvas_size
-    content_width, content_height = _frame_content_size(params, canvas_w)
+    base_content_size = _frame_content_size(params, canvas_w)
+    pre_rotation_size = _layer_size_before_rotation(base_content_size, params)
 
-    positioned: list[tuple[Image.Image, int, int]] = []
+    placements: list[PhotoPlacement] = []
     centers: list[tuple[float, float]] = []
     total = len(chosen)
     for index, path in enumerate(chosen):
-        try:
-            framed = _framed_photo(path, content_width, content_height, params)
-        except Exception:
-            continue
-        layer = _with_shadow(framed, params)
-
         angle = rng.uniform(-params.max_rotation_deg, params.max_rotation_deg)
-        layer = layer.rotate(angle, expand=True, resample=Image.BICUBIC)
+        layer_w, layer_h = _rotated_bbox_size(pre_rotation_size[0], pre_rotation_size[1], angle)
 
-        min_dist = max(content_width, content_height) * params.min_spacing
+        min_dist = max(base_content_size) * params.min_spacing
         region = _region_for_index(params.layout, index, total, params.canvas_size, rng, params)
-        cx, cy = _scatter_center(region, layer.size, rng, centers, min_dist)
+        cx, cy = _scatter_center(region, (layer_w, layer_h), rng, centers, min_dist)
         centers.append((cx, cy))
-        x = int(cx - layer.width / 2)
-        y = int(cy - layer.height / 2)
-        positioned.append((layer, x, y))
+        placements.append(PhotoPlacement(path=path, cx=cx, cy=cy, angle=angle, scale=1.0))
 
     # orden aleatorio de dibujado, para que no siempre la ultima foto quede arriba de todas
-    rng.shuffle(positioned)
-    for layer, x, y in positioned:
+    rng.shuffle(placements)
+    return CollageLayout(placements=placements, background_path=background_path)
+
+
+def render_from_layout(layout: CollageLayout, params: CollageParams) -> Image.Image:
+    """Renderiza la imagen final a partir de un CollageLayout ya definido
+    (generado por auto_layout, o editado a mano por el usuario). El orden
+    de `layout.placements` determina el z-order (ultimas = arriba)."""
+    canvas_w = params.canvas_size[0]
+    base_content_size = _frame_content_size(params, canvas_w)
+    canvas = _make_background(params.canvas_size, layout.background_path, params).convert("RGBA")
+
+    for placement in layout.placements:
+        try:
+            layer, x, y = _render_placement(placement, base_content_size, params)
+        except Exception:
+            continue
         canvas.alpha_composite(layer, dest=(x, y))
 
     return canvas.convert("RGB")
+
+
+def generate_collage(image_paths: list[Path], params: CollageParams) -> Image.Image:
+    """Genera una imagen tipo "pila de fotos" a partir de una lista de rutas de imagenes."""
+    layout = auto_layout(image_paths, params)
+    return render_from_layout(layout, params)
 
 
 def collage_from_folder(folder: Path, params: CollageParams, extensions: tuple[str, ...] = (".jpg", ".jpeg", ".png", ".webp")) -> Image.Image:

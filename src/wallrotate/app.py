@@ -2,14 +2,15 @@
 
 from __future__ import annotations
 
+import math
 import shutil
 import subprocess
 import sys
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 
-from PySide6.QtCore import Qt, QEvent, QSize
-from PySide6.QtGui import QIcon, QPixmap
+from PySide6.QtCore import Qt, QEvent, QRectF, QSize
+from PySide6.QtGui import QColor, QIcon, QImage, QPainter, QPixmap
 from PySide6.QtWidgets import (
     QApplication,
     QCheckBox,
@@ -17,6 +18,10 @@ from PySide6.QtWidgets import (
     QDialog,
     QFileDialog,
     QFormLayout,
+    QGraphicsItem,
+    QGraphicsPixmapItem,
+    QGraphicsScene,
+    QGraphicsView,
     QGroupBox,
     QHBoxLayout,
     QLabel,
@@ -35,9 +40,28 @@ from PySide6.QtWidgets import (
 )
 
 from . import plasma_bridge
-from .collage import CollageParams, generate_collage
+from .collage import (
+    CollageLayout,
+    CollageParams,
+    PhotoPlacement,
+    auto_layout,
+    base_content_size,
+    generate_collage,
+    render_background,
+    render_from_layout,
+    render_photo_base,
+)
 from .config import CACHE_DIR, CONFIG_PATH, Config, ScreenProfile, load_config, save_config
-from .engine import apply_profile, current_image_path, go_next, go_previous, run_once, toggle_pause, toggle_pause_all
+from .engine import (
+    apply_prerendered,
+    apply_profile,
+    current_image_path,
+    go_next,
+    go_previous,
+    run_once,
+    toggle_pause,
+    toggle_pause_all,
+)
 from .config import load_state, save_state
 
 AUTOSTART_PATH = Path.home() / ".config" / "autostart" / "wallrotate.desktop"
@@ -136,11 +160,188 @@ LAYOUT_LABELS = {
 LAYOUT_KEYS = {v: k for k, v in LAYOUT_LABELS.items()}
 
 
+def _pil_to_qpixmap(im) -> QPixmap:
+    im = im.convert("RGBA")
+    data = im.tobytes("raw", "RGBA")
+    qimg = QImage(data, im.width, im.height, QImage.Format.Format_RGBA8888)
+    return QPixmap.fromImage(qimg.copy())
+
+
+class _PhotoItem(QGraphicsPixmapItem):
+    """Foto arrastrable en el editor de collage: agarrar el cuerpo mueve la
+    foto; agarrar la esquina inferior derecha rota (grados chicos, izq/der)
+    y cambia el tamano a la vez, como un gesto unico de "esquina"."""
+
+    _next_z = 1.0
+    _handle_size = 26
+    _max_rotation = 60.0
+    _min_scale = 0.4
+    _max_scale = 2.2
+
+    def __init__(self, pixmap: QPixmap, placement: PhotoPlacement):
+        super().__init__(pixmap)
+        self.placement = placement
+        self.setTransformOriginPoint(pixmap.width() / 2, pixmap.height() / 2)
+        self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsSelectable, True)
+        self.setAcceptHoverEvents(True)
+        self._mode: str | None = None
+        self._press_scene = None
+        self._start_item_pos = None
+        self._center_scene = None
+        self._start_rotation = 0.0
+        self._start_scale = 1.0
+        self._start_angle = 0.0
+        self._start_dist = 1.0
+
+    def _handle_rect(self) -> QRectF:
+        w, h = self.pixmap().width(), self.pixmap().height()
+        s = self._handle_size
+        return QRectF(w - s, h - s, s, s)
+
+    def paint(self, painter, option, widget=None) -> None:
+        super().paint(painter, option, widget)
+        painter.setBrush(QColor(61, 174, 233, 220))
+        painter.setPen(QColor(255, 255, 255, 230))
+        painter.drawEllipse(self._handle_rect())
+
+    def _raise_to_front(self) -> None:
+        _PhotoItem._next_z += 1
+        self.setZValue(_PhotoItem._next_z)
+
+    def hoverMoveEvent(self, event) -> None:
+        if self._handle_rect().contains(event.pos()):
+            self.setCursor(Qt.CursorShape.SizeFDiagCursor)
+        else:
+            self.setCursor(Qt.CursorShape.OpenHandCursor)
+        super().hoverMoveEvent(event)
+
+    def mousePressEvent(self, event) -> None:
+        self._raise_to_front()
+        if self._handle_rect().contains(event.pos()):
+            self._mode = "transform"
+            self._center_scene = self.mapToScene(self.transformOriginPoint())
+            self._start_rotation = self.rotation()
+            self._start_scale = self.scale()
+            vec = event.scenePos() - self._center_scene
+            self._start_angle = math.degrees(math.atan2(vec.y(), vec.x()))
+            self._start_dist = max(math.hypot(vec.x(), vec.y()), 1.0)
+        else:
+            self._mode = "move"
+            self._press_scene = event.scenePos()
+            self._start_item_pos = self.pos()
+        event.accept()
+
+    def mouseMoveEvent(self, event) -> None:
+        if self._mode == "transform":
+            vec = event.scenePos() - self._center_scene
+            dist = max(math.hypot(vec.x(), vec.y()), 1.0)
+            angle = math.degrees(math.atan2(vec.y(), vec.x()))
+            delta_angle = angle - self._start_angle
+            new_rotation = max(-self._max_rotation, min(self._max_rotation, self._start_rotation + delta_angle))
+            new_scale = max(self._min_scale, min(self._max_scale, self._start_scale * (dist / self._start_dist)))
+            self.setRotation(new_rotation)
+            self.setScale(new_scale)
+        elif self._mode == "move":
+            delta = event.scenePos() - self._press_scene
+            self.setPos(self._start_item_pos + delta)
+        event.accept()
+
+    def mouseReleaseEvent(self, event) -> None:
+        self._mode = None
+        event.accept()
+
+
+class CollageEditorDialog(QDialog):
+    """Editor simple para reacomodar un collage ya generado: mover, rotar
+    (chico) y agrandar/achicar cada foto para, por ejemplo, que una no tape
+    por completo a otra. No cambia que fotos se usan."""
+
+    def __init__(self, layout: CollageLayout, params: CollageParams, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Editar collage")
+        self.resize(960, 640)
+        self._layout_data = layout
+        self._params = params
+        self._items: list[_PhotoItem] = []
+
+        canvas_w, canvas_h = params.canvas_size
+        self.scene = QGraphicsScene(0, 0, canvas_w, canvas_h)
+
+        bg_img = render_background(layout.background_path, params.canvas_size, params)
+        bg_item = QGraphicsPixmapItem(_pil_to_qpixmap(bg_img))
+        bg_item.setZValue(-1)
+        self.scene.addItem(bg_item)
+
+        content_size = base_content_size(params)
+        for placement in layout.placements:
+            try:
+                base_img = render_photo_base(placement.path, content_size, 1.0, params)
+            except Exception:
+                continue
+            item = _PhotoItem(_pil_to_qpixmap(base_img), placement)
+            pw, ph = item.pixmap().width(), item.pixmap().height()
+            item.setPos(placement.cx - pw / 2, placement.cy - ph / 2)
+            item.setRotation(placement.angle)
+            item.setScale(placement.scale)
+            item._raise_to_front()
+            self.scene.addItem(item)
+            self._items.append(item)
+
+        self.view = QGraphicsView(self.scene)
+        self.view.setRenderHint(QPainter.RenderHint.Antialiasing)
+        self.view.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
+
+        vbox = QVBoxLayout(self)
+        hint = QLabel(
+            "Arrastra el cuerpo de una foto para moverla. Arrastra el punto celeste "
+            "de la esquina para rotarla e inclinarla al mismo tiempo."
+        )
+        hint.setWordWrap(True)
+        vbox.addWidget(hint)
+        vbox.addWidget(self.view)
+
+        btn_row = QHBoxLayout()
+        cancel_btn = QPushButton("Cancelar")
+        cancel_btn.clicked.connect(self.reject)
+        accept_btn = QPushButton("Aceptar")
+        accept_btn.clicked.connect(self.accept)
+        btn_row.addWidget(cancel_btn)
+        btn_row.addWidget(accept_btn)
+        vbox.addLayout(btn_row)
+
+    def showEvent(self, event) -> None:
+        super().showEvent(event)
+        self.view.fitInView(self.scene.sceneRect(), Qt.AspectRatioMode.KeepAspectRatio)
+
+    def resizeEvent(self, event) -> None:
+        super().resizeEvent(event)
+        self.view.fitInView(self.scene.sceneRect(), Qt.AspectRatioMode.KeepAspectRatio)
+
+    def result_layout(self) -> CollageLayout:
+        ordered = sorted(self._items, key=lambda it: it.zValue())
+        placements = []
+        for item in ordered:
+            center = item.mapToScene(item.transformOriginPoint())
+            placements.append(
+                PhotoPlacement(
+                    path=item.placement.path,
+                    cx=center.x(),
+                    cy=center.y(),
+                    angle=item.rotation(),
+                    scale=item.scale(),
+                )
+            )
+        return CollageLayout(placements=placements, background_path=self._layout_data.background_path)
+
+
 class ScreenTab(QWidget):
     def __init__(self, screen: plasma_bridge.ScreenInfo, profile: ScreenProfile):
         super().__init__()
         self.screen = screen
         self.profile = profile
+        self._current_layout: CollageLayout | None = None
+        self._current_params: CollageParams | None = None
+        self._current_image = None
         self._build_ui()
         self._load_from_profile()
 
@@ -238,9 +439,12 @@ class ScreenTab(QWidget):
         btn_row = QHBoxLayout()
         self.preview_btn = QPushButton("Vista previa")
         self.preview_btn.clicked.connect(self._preview)
+        self.edit_collage_btn = QPushButton("Editar collage...")
+        self.edit_collage_btn.clicked.connect(self._edit_collage)
         self.apply_btn = QPushButton("Aplicar ahora")
         self.apply_btn.clicked.connect(self._apply_now)
         btn_row.addWidget(self.preview_btn)
+        btn_row.addWidget(self.edit_collage_btn)
         btn_row.addWidget(self.apply_btn)
         root.addLayout(btn_row)
 
@@ -253,7 +457,9 @@ class ScreenTab(QWidget):
         root.addStretch()
 
     def _on_source_changed(self, text: str) -> None:
-        self.collage_box.setVisible(SOURCE_KEYS.get(text) == "collage")
+        is_collage = SOURCE_KEYS.get(text) == "collage"
+        self.collage_box.setVisible(is_collage)
+        self.edit_collage_btn.setVisible(is_collage)
 
     def _set_row_visible(self, widget: QWidget, visible: bool) -> None:
         label = self.collage_form.labelForField(widget)
@@ -299,6 +505,7 @@ class ScreenTab(QWidget):
         self.oval_fill_check.setChecked(p.collage.oval_fill)
         self._on_layout_changed(self.layout_combo.currentText())
         self.collage_box.setVisible(p.source_type == "collage")
+        self.edit_collage_btn.setVisible(p.source_type == "collage")
 
     def to_profile(self) -> ScreenProfile:
         p = self.profile
@@ -347,12 +554,20 @@ class ScreenTab(QWidget):
                     path_jitter=profile.collage.path_jitter,
                     oval_fill=profile.collage.oval_fill,
                 )
-                img = generate_collage(images, params)
+                layout = auto_layout(images, params)
+                img = render_from_layout(layout, params)
+                self._current_layout = layout
+                self._current_params = params
+                self._current_image = img
                 preview_path = Path("/tmp") / f"wallrotate_preview_{self.screen.desktop_index}.png"
                 img.save(preview_path)
             elif profile.source_type == "single_image":
+                self._current_layout = None
+                self._current_image = None
                 preview_path = Path(profile.source_path)
             else:
+                self._current_layout = None
+                self._current_image = None
                 images = [p for p in Path(profile.source_path).rglob("*") if p.suffix.lower() in (".jpg", ".jpeg", ".png", ".webp")]
                 if not images:
                     raise ValueError("La carpeta no tiene imagenes")
@@ -364,6 +579,20 @@ class ScreenTab(QWidget):
         pixmap = QPixmap(str(preview_path)).scaledToWidth(500, Qt.SmoothTransformation)
         self.preview_label.setPixmap(pixmap)
 
+    def _edit_collage(self) -> None:
+        if self._current_layout is None or self._current_params is None:
+            QMessageBox.information(self, "Primero una vista previa", "Genera una vista previa del collage antes de editarlo.")
+            return
+        dlg = CollageEditorDialog(self._current_layout, self._current_params, parent=self)
+        if dlg.exec() != QDialog.DialogCode.Accepted:
+            return
+        self._current_layout = dlg.result_layout()
+        self._current_image = render_from_layout(self._current_layout, self._current_params)
+        preview_path = Path("/tmp") / f"wallrotate_preview_{self.screen.desktop_index}.png"
+        self._current_image.save(preview_path)
+        pixmap = QPixmap(str(preview_path)).scaledToWidth(500, Qt.SmoothTransformation)
+        self.preview_label.setPixmap(pixmap)
+
     def _apply_now(self) -> None:
         profile = self.to_profile()
         if not profile.source_path:
@@ -371,7 +600,10 @@ class ScreenTab(QWidget):
             return
         state = load_state()
         try:
-            apply_profile(profile, state)
+            if profile.source_type == "collage" and self._current_image is not None:
+                apply_prerendered(profile, self._current_image, state)
+            else:
+                apply_profile(profile, state)
         except Exception as exc:
             QMessageBox.critical(self, "Error aplicando el fondo", str(exc))
             return

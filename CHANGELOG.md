@@ -1,11 +1,28 @@
 # Changelog
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
+Versionado: `MAYOR.MENOR.PARCHE` — cambios mayores (que cambian el
+propósito o la forma de usar la app) suben el número mayor, cambios
+menores (features nuevas) suben el número del medio, arreglos suben el
+último.
 
-## [Sin publicar] - 2026-07-13
+## [1.0.0] - 2026-07-25
 
 ### Agregado
 
+- Editor interactivo de collage ("Editar collage..." después de la
+  vista previa): arrastrar el cuerpo de una foto la mueve; arrastrar el
+  punto de la esquina la rota (grados chicos, izq/der, no vuelta
+  completa) y la agranda/achica al mismo tiempo. Clickear una foto la
+  trae al frente, para poder sacarla de abajo si otra la tapa por
+  completo. No cambia qué fotos se usan, solo su posición/tamaño/ángulo
+  para esa aplicación puntual — la rotación automática del timer sigue
+  generando collages al azar como siempre. Requirió partir
+  `collage.py` en dos pasos (`auto_layout` calcula posiciones sin
+  dibujar nada; `render_from_layout` dibuja a partir de una lista de
+  `PhotoPlacement`, editada o no) y agregar `apply_prerendered()` en
+  `engine.py` para aplicar la imagen ya editada en vez de regenerar una
+  nueva al azar.
 - Autoarranque como opción real de la app: casillero "Iniciar
   automáticamente con el sistema" en la ventana principal (crea/borra
   `~/.config/autostart/wallrotate.desktop`). Antes había que armar ese
@@ -133,4 +150,5 @@ Primera versión funcional.
 - README con instalación, uso, arquitectura, capturas de ejemplo.
 - Historia del proyecto y créditos a John's Background Switcher.
 
+[1.0.0]: https://github.com/Cap-dutch/wallrotate/releases/tag/v1.0.0
 [0.1.0]: https://github.com/Cap-dutch/wallrotate/releases/tag/v0.1.0
